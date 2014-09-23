@@ -14,5 +14,5 @@ class Agg(object):
     ]
 
     @classmethod
-    def get_agg_id(agg_name):
+    def get_agg_id(cls, agg_name):
         return cls.agg_types.index(agg_name)
