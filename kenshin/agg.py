@@ -13,6 +13,6 @@ class Agg(object):
         'min',
     ]
 
-    @staticmethod
+    @classmethod
     def get_agg_id(agg_name):
-        return Agg.agg_types.index(agg_name)
+        return cls.agg_types.index(agg_name)
