@@ -20,6 +20,7 @@ I recommended using virtualenv when installing dependencies:
 
     $ virtualenv env
     $ source env/bin/activate
+    $ pip install -r requirements.txt
 
 Tests can be run using nosetests:
 
