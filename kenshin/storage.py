@@ -241,7 +241,6 @@ class Storage(object):
 
             return self._archive_fetch(f, header, archive, from_time, until_time)
 
-
     def _archive_fetch(self, fh, header, archive, from_time, until_time):
         from_time = roundup(from_time, archive['sec_per_point'])
         until_time = roundup(until_time, archive['sec_per_point'])
