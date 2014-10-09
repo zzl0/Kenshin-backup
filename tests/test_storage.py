@@ -7,7 +7,7 @@ import unittest
 from kenshin.storage import (
     Storage, METADATA_SIZE, METADATA_FORMAT, POINT_FORMAT)
 from kenshin.agg import Agg
-from kenshin.utils import mkdir_p
+from kenshin.utils import mkdir_p, roundup
 
 
 class TestStorage(unittest.TestCase):
@@ -36,11 +36,11 @@ class TestStorage(unittest.TestCase):
             'host=webserver01,cpu=1',
         ]
         archive_list = [
-            (1, 60),
-            (60, 60),
+            (1, 6),
+            (3, 6),
         ]
         x_files_factor = 1.0
-        agg_name = 'avg'
+        agg_name = 'min'
         return [metric_name, tag_list, archive_list, x_files_factor, agg_name]
 
     def test_gen_path(self):
@@ -63,17 +63,30 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(archive_list, _archive_list)
 
     def test_basic_update_fetch(self):
-        def gen_val(i):
-            return (10+i, 20+i)
-
         now_ts = 1411628779
-        points = [(now_ts - i, gen_val(i)) for i in range(1, 6)]
+        num_points = 5
+        points = [(now_ts - i, self._gen_val(i)) for i in range(1, num_points+1)]
         self.storage.update(self.path, points, now_ts)
 
-        from_ts = now_ts - 5
+        from_ts = now_ts - num_points
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
 
         time_info = (from_ts, now_ts, 1)
         vals = [tuple(map(float, v)) for _, v in sorted(points)]
         expected = (time_info, vals)
+        self.assertEqual(series, expected)
+
+    def _gen_val(self, i):
+        return (i, 10+i)
+
+    def test_update_propagate(self):
+        now_ts = 1411628779
+        num_points = 6
+        points = [(now_ts - i, self._gen_val(i)) for i in range(1, num_points+1)]
+        self.storage.update(self.path, points, now_ts)
+
+        from_ts = now_ts - num_points - 1
+        series = self.storage.fetch(self.path, from_ts, now=now_ts)
+        time_info = (from_ts, roundup(now_ts, 3), 3)
+        expected = time_info, [(5.0, 15.0), (2.0, 12.0), (0.0, 0.0)]
         self.assertEqual(series, expected)
