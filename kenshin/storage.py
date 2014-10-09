@@ -15,6 +15,8 @@
 
 import os
 import time
+import numpy as np
+import math
 import struct
 import operator
 
@@ -36,7 +38,7 @@ ARCHIVEINFO_FORMAT = "!3L"
 ARCHIVEINFO_SIZE = struct.calcsize(ARCHIVEINFO_FORMAT)
 
 
-### Exceptioons
+### Exceptions
 
 class KenshinException(Exception):
     pass
@@ -162,13 +164,16 @@ class Storage(object):
 
             # remove outdated points
             curr_points = [p for p in points
-                           if first_retention > (now-p[0])]
-            self._update_archive(f, header, first_archive, curr_points)
+                           if first_retention >= (now-p[0])]
+            if curr_points:
+                self._update_archive(f, header, first_archive, curr_points, 0)
 
-    def _update_archive(self, fh, header, archive, points):
+    def _update_archive(self, fh, header, archive, points, archive_idx):
         time_step = archive['sec_per_point']
-        aligned_points = [(ts - (ts % time_step), val)
-                          for (ts, val) in points]
+        aligned_points = [(p[0] - (p[0] % time_step), p[1])
+                          for p in points if p]
+        if not aligned_points:
+            return
 
         # take the last val of duplicates
         aligned_points = sorted(dict(aligned_points).items(),
@@ -201,6 +206,13 @@ class Storage(object):
         else:
             fh.write(packed_str)
 
+        archive_list = header['archive_list']
+        next_archive_idx = archive_idx + 1
+        if next_archive_idx < len(archive_list):
+            timestamp_range = aligned_points[0][0], aligned_points[-1][0]
+            self._propagate(fh, header, archive, archive_list[next_archive_idx],
+                            timestamp_range, next_archive_idx)
+
     def _read_base_point(self, fh, archive, header):
         fh.seek(archive['offset'])
         base_point = fh.read(header['point_size'])
@@ -211,6 +223,90 @@ class Storage(object):
         point_distince = time_distance / archive['sec_per_point']
         byte_distince =  point_distince * header['point_size']
         return archive['offset'] + (byte_distince % archive['size'])
+
+    @staticmethod
+    def get_propagate_timeunit(low_sec_per_point, high_sec_per_point, xff):
+        num_point = low_sec_per_point / high_sec_per_point
+        return int(math.ceil(num_point * xff)) * high_sec_per_point
+
+    def _propagate(self, fh, header, higher, lower, timestamp_range, lower_idx):
+        """
+        propagte update to low precision archives.
+        """
+        from_time, until_time = timestamp_range
+        timeunit = Storage.get_propagate_timeunit(lower['sec_per_point'],
+                                                  higher['sec_per_point'],
+                                                  header['x_files_factor'])
+        from_time_boundary = from_time / timeunit
+        until_time_boundary = until_time / timeunit
+        if from_time_boundary == until_time_boundary:
+            return False
+
+        lower_interval_end = roundup(until_time, timeunit)
+        # lower_interval_start = min(lower_interval_end-timeunit, roundup(from_time, timeunit))
+        lower_interval_start = min(lower_interval_end-timeunit, from_time_boundary * timeunit)
+
+        fh.seek(higher['offset'])
+        packed_base_interval = fh.read(LONG_SIZE)
+        higher_base_interval = struct.unpack(LONG_FORMAT, packed_base_interval)[0]
+
+        if higher_base_interval == 0:
+            higher_first_offset = higher['offset']
+        else:
+            higher_first_offset = self._timestamp2offset(lower_interval_start,
+                                                         higher_base_interval,
+                                                         header,
+                                                         higher)
+        higher_point_num = (lower_interval_end - lower_interval_start) / higher['sec_per_point']
+        higher_size = higher_point_num * header['point_size']
+        relative_first_offset = higher_first_offset - higher['offset']
+        relative_last_offset = (relative_first_offset + higher_size) % higher['size']
+        higher_last_offset = relative_last_offset + higher['offset']
+
+        # get unpacked series str
+        # TODO: abstract this to a function
+        fh.seek(higher_first_offset)
+        if higher_first_offset < higher_last_offset:
+            series_str = fh.read(higher_last_offset - higher_first_offset)
+        else:
+            higher_end = higher['offset'] + higher['size']
+            series_str = fh.read(higher_end - higher_first_offset)
+            fh.seek(higher['offset'])
+            series_str = fh.read(higher_last_offset - higher['offset'])
+
+        # now we unpack the series data we just read
+        point_format = header['point_format']
+        byte_order, point_type = point_format[0], point_format[1:]
+        point_num = len(series_str) / header['point_size']
+        # assert point_num == higher_point_num
+        series_format = byte_order + (point_type * point_num)
+        unpacked_series = struct.unpack(series_format, series_str)
+
+        # and finally we construct a list of values
+        tag_cnt = len(header['tag_list'])
+        agg_cnt = lower['sec_per_point'] / higher['sec_per_point']
+        step = (tag_cnt + 1) * agg_cnt
+        point_cnt = (lower_interval_end - lower_interval_start) / lower['sec_per_point']
+        lower_points = [None] * point_cnt
+
+        unpacked_series = unpacked_series[::-1]
+        for i in xrange(0, len(unpacked_series), step):
+            higher_points = unpacked_series[i: i+step]
+            agg_point = self._get_agg_point(higher_points, tag_cnt, header['agg_id'])
+            lower_points[i/step] = agg_point
+
+        self._update_archive(fh, header, lower, lower_points, lower_idx)
+
+    def _get_agg_point(self, higher_points, tag_cnt, agg_id):
+        higher_points = higher_points[::-1]
+        agg_func = Agg.get_agg_func(agg_id)
+        step = tag_cnt + 1
+        points = np.array([higher_points[i: i+step]
+                           for i in xrange(0, len(higher_points), step)])
+        points = points.transpose()
+        ts = points[0][-1]
+        val = [agg_func(x) for x in points[1:]]
+        return ts, val
 
     def fetch(self, path, from_time, until_time=None, now=None):
         with open(path, 'rb') as f:
