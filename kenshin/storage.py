@@ -19,6 +19,7 @@ import numpy as np
 import math
 import struct
 import operator
+import inspect
 
 from agg import Agg
 from utils import mkdir_p, roundup
@@ -46,6 +47,47 @@ class KenshinException(Exception):
 
 class InvalidTime(KenshinException):
     pass
+
+
+### debug tool
+
+debug = lambda *a, **kw: None
+
+
+def enable_debug(ignore_header=False):
+    """
+    调式读写操作.
+
+    由于 header 函数在一次写入中被调用了多次，而 header 数据较小，完全可以读取缓存数据，
+    因此 enable_debug 中使用 ignore_header 来忽略了 header 的读操作，从而方便 io
+    性能的测试.
+    """
+    global open, debug
+
+    def debug(msg):
+        print "DEBUG :: %s" % msg
+
+    class open(file):
+        write_cnt = 0
+        read_cnt = 0
+
+        def __init__(self, *args, **kwargs):
+            file.__init__(self, *args, **kwargs)
+
+        def write(self, data):
+            caller = inspect.stack()[1][3]
+            open.write_cnt += 1
+            debug("Write %d bytes #%d in %s" % (len(data), self.write_cnt, caller))
+            return file.write(self, data)
+
+        def read(self, bytes):
+            caller = inspect.stack()[1][3]
+            if ignore_header and caller == "header":
+                pass
+            else:
+                open.read_cnt += 1
+            debug("Read %d bytes #%d in %s" % (bytes, self.read_cnt, caller))
+            return file.read(self, bytes)
 
 
 ### Storage
@@ -242,9 +284,13 @@ class Storage(object):
         if from_time_boundary == until_time_boundary:
             return False
 
-        lower_interval_end = roundup(until_time, timeunit)
-        # lower_interval_start = min(lower_interval_end-timeunit, roundup(from_time, timeunit))
-        lower_interval_start = min(lower_interval_end-timeunit, from_time_boundary * timeunit)
+        if lower['sec_per_point'] <= timeunit:
+            lower_interval_end = roundup(until_time, timeunit)
+            # lower_interval_start = min(lower_interval_end-timeunit, roundup(from_time, timeunit))
+            lower_interval_start = min(lower_interval_end-timeunit, from_time_boundary * timeunit)
+        else:
+            lower_interval_end = roundup(until_time, lower['sec_per_point'])
+            lower_interval_start = from_time - from_time % lower['sec_per_point']
 
         fh.seek(higher['offset'])
         packed_base_interval = fh.read(LONG_SIZE)
@@ -295,6 +341,7 @@ class Storage(object):
             agg_point = self._get_agg_point(higher_points, tag_cnt, header['agg_id'])
             lower_points[i/step] = agg_point
 
+        lower_points = [x for x in lower_points if x and x[0]]  # filter zero item
         self._update_archive(fh, header, lower, lower_points, lower_idx)
 
     def _get_agg_point(self, higher_points, tag_cnt, agg_id):
@@ -304,7 +351,7 @@ class Storage(object):
         points = np.array([higher_points[i: i+step]
                            for i in xrange(0, len(higher_points), step)])
         points = points.transpose()
-        ts = points[0][-1]
+        ts = int(points[0][-1])
         val = [agg_func(x) for x in points[1:]]
         return ts, val
 
