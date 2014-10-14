@@ -14,6 +14,7 @@
 #
 
 import os
+import re
 import time
 import numpy as np
 import math
@@ -44,8 +45,10 @@ ARCHIVEINFO_SIZE = struct.calcsize(ARCHIVEINFO_FORMAT)
 class KenshinException(Exception):
     pass
 
-
 class InvalidTime(KenshinException):
+    pass
+
+class InvalidConfig(KenshinException):
     pass
 
 
@@ -62,10 +65,7 @@ def enable_debug(ignore_header=False):
     因此 enable_debug 中使用 ignore_header 来忽略了 header 的读操作，从而方便 io
     性能的测试.
     """
-    global open, debug
-
-    def debug(msg):
-        print "DEBUG :: %s" % msg
+    global open
 
     class open(file):
         write_cnt = 0
@@ -90,6 +90,62 @@ def enable_debug(ignore_header=False):
             return file.read(self, bytes)
 
 
+### retention parser
+
+class RetentionParser(object):
+    TIME_UNIT = {
+        'seconds': 1,
+        'minutes': 60,
+        'hours': 3600,
+        'days': 86400,
+        'weeks': 86400 * 7,
+        'years': 86400 * 365,
+    }
+    # time pattern (e.g. 60s, 12h)
+    pat = re.compile(r'^(\d+)([a-z]+)$')
+
+    @classmethod
+    def get_time_unit_name(cls, s):
+        for k in cls.TIME_UNIT.keys():
+            if k.startswith(s):
+                return k
+        raise InvalidTime("Invalid time unit: '%s'" % s)
+
+    @classmethod
+    def get_seconds(cls, time_unit):
+        return cls.TIME_UNIT[cls.get_time_unit_name(time_unit)]
+
+    @classmethod
+    def parse_time_str(cls, s):
+        """
+        Parse time string to seconds.
+
+        >>> RetentionParser.parse_time_str('12h')
+        43200
+        """
+        if s.isdigit():
+            return int(s)
+
+        m = cls.pat.match(s)
+        if m:
+            num, unit = m.groups()
+            return int(num) * cls.get_seconds(unit)
+        else:
+            raise InvalidTime("Invalid rention specification '%s'" % s)
+
+    @classmethod
+    def parse_retention_def(cls, retention_def):
+        precision, point_cnt = retention_def.strip().split(':')
+        precision = cls.parse_time_str(precision)
+
+        if point_cnt.isdigit():
+            point_cnt = int(point_cnt)
+        else:
+            point_cnt = cls.parse_time_str(point_cnt) / precision
+
+        return precision, point_cnt
+
+
 ### Storage
 
 class Storage(object):
@@ -99,8 +155,9 @@ class Storage(object):
 
     def create(self, metric_name, tag_list, archive_list, x_files_factor=None,
                agg_name=None):
-        path = self.gen_path(self.data_dir, metric_name)
+        Storage.validate_archive_list(archive_list, x_files_factor)
 
+        path = self.gen_path(self.data_dir, metric_name)
         if os.path.exists(path):
             raise IOError('file %s already exits.' % path)
         else:
@@ -119,6 +176,59 @@ class Storage(object):
                 f.write(zeroes)
                 remaining -= chunk_size
             f.write(zeroes[:remaining])
+
+    @staticmethod
+    def validate_archive_list(archive_list, xff):
+        """
+        Validates an archive_list.
+
+        An archive_list must:
+        1. Have at least one archive config.
+        2. No duplicates.
+        3. Higher precision archives' precision must evenly divide
+           all lower precison archives' precision.
+        4. Lower precision archives must cover larger time intervals
+           than higher precision archives.
+        5. Each archive must have at least enough points to the next
+           archive.
+        """
+
+        # 1
+        if not archive_list:
+            raise InvalidConfig("must specify at least one archive config")
+
+        archive_list.sort(key=operator.itemgetter(0))
+
+        for i, archive in enumerate(archive_list):
+            try:
+                next_archive = archive_list[i+1]
+            except:
+                break
+            # 2
+            if not archive[0] < next_archive[0]:
+                raise InvalidConfig("two same precision config: '%s' and '%s'" %
+                                    (archive, next_archive))
+            # 3
+            if next_archive[0] % archive[0] != 0:
+                raise InvalidConfig("higher precision must evenly divide lower "
+                                    "precision: %s and %s" %
+                                    (archive[0], next_archive[0]))
+            # 4
+            retention = archive[0] * archive[1]
+            next_retention = next_archive[0] * next_archive[1]
+            if not next_retention > retention:
+                raise InvalidConfig("lower precision archive must cover "
+                                    "larger time intervals that higher "
+                                    "precision archive: (%d, %s) and (%d, %s)" %
+                                    (i, retention, i+1, next_retention))
+            # 5
+            archive_point_cnt = archive[1]
+            point_per_consolidation = next_archive[0] / archive[0]
+            if not (archive_point_cnt / xff) >= point_per_consolidation:
+                raise InvalidConfig("each archive must have at least enough "
+                                    "points to consolidate to the next archive: "
+                                    "(%d, %s) and (%d, %s) xff=%s" %
+                                    (i, retention, i+1, next_retention, xff))
 
     @staticmethod
     def gen_path(data_dir, metric_name):

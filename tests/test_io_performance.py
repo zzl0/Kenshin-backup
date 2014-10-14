@@ -6,14 +6,9 @@ import unittest
 
 import kenshin.storage
 from kenshin.storage import (
-    Storage, METADATA_SIZE, METADATA_FORMAT, POINT_FORMAT, enable_debug)
+    Storage, METADATA_SIZE, METADATA_FORMAT, POINT_FORMAT, enable_debug,
+    RetentionParser)
 from kenshin.utils import mkdir_p
-
-MIN = 60
-HOUR = 3600
-DAY = HOUR * 24
-WEEK = DAY * 7
-YEAR = DAY * 365
 
 
 class TestStorageIO(unittest.TestCase):
@@ -41,13 +36,10 @@ class TestStorageIO(unittest.TestCase):
             'host=webserver01,cpu=0',
             'host=webserver01,cpu=1',
         ]
-        archive_list = [
-            (1, HOUR),
-            (MIN, (2*DAY) / MIN),
-            (5*MIN, WEEK / (5*MIN)),
-            (15*MIN, (25*WEEK) / (15*MIN)),
-            (12*HOUR, (5*YEAR) / (12*HOUR))
-        ]
+        archive_list = "1s:1h,60s:2d,300s:7d,15m:25w,12h:5y".split(',')
+        archive_list = [RetentionParser.parse_retention_def(x)
+                        for x in archive_list]
+
         x_files_factor = 40
         agg_name = 'min'
         return [metric_name, tag_list, archive_list, x_files_factor, agg_name]
@@ -66,10 +58,11 @@ class TestStorageIO(unittest.TestCase):
         enable_debug(ignore_header=True)
 
         now_ts = 1411628779
-        ten_min = 10 * MIN
-        from_ts = now_ts - DAY
+        ten_min = 10 * RetentionParser.TIME_UNIT['minutes']
+        one_day = RetentionParser.TIME_UNIT['days']
+        from_ts = now_ts - one_day
 
-        for i in range(DAY / ten_min):
+        for i in range(one_day / ten_min):
             points = [(from_ts + i * ten_min + j, self._gen_val(i * ten_min + j))
                       for j in range(ten_min)]
             self.storage.update(self.path, points, from_ts + (i+1) * ten_min)
