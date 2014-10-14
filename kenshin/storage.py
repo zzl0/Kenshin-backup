@@ -65,29 +65,38 @@ def enable_debug(ignore_header=False):
     因此 enable_debug 中使用 ignore_header 来忽略了 header 的读操作，从而方便 io
     性能的测试.
     """
-    global open
+    global open, debug
+
+    if not ignore_header:
+        def debug(msg):
+            print "DEBUG :: %s" % msg
 
     class open(file):
         write_cnt = 0
         read_cnt = 0
 
         def __init__(self, *args, **kwargs):
+            caller = self.get_caller()
+            debug("=========== open in %s ===========" % caller)
             file.__init__(self, *args, **kwargs)
 
         def write(self, data):
-            caller = inspect.stack()[1][3]
+            caller = self.get_caller()
             open.write_cnt += 1
             debug("Write %d bytes #%d in %s" % (len(data), self.write_cnt, caller))
             return file.write(self, data)
 
         def read(self, bytes):
-            caller = inspect.stack()[1][3]
+            caller = self.get_caller()
             if ignore_header and caller == "header":
                 pass
             else:
                 open.read_cnt += 1
             debug("Read %d bytes #%d in %s" % (bytes, self.read_cnt, caller))
             return file.read(self, bytes)
+
+        def get_caller(self):
+            return inspect.stack()[2][3]
 
 
 ### retention parser
@@ -391,13 +400,12 @@ class Storage(object):
                                                   header['x_files_factor'])
         from_time_boundary = from_time / timeunit
         until_time_boundary = until_time / timeunit
-        if from_time_boundary == until_time_boundary:
+        if (from_time_boundary == until_time_boundary) and (from_time % timeunit) != 0:
             return False
 
         if lower['sec_per_point'] <= timeunit:
-            lower_interval_end = roundup(until_time, timeunit)
-            # lower_interval_start = min(lower_interval_end-timeunit, roundup(from_time, timeunit))
-            lower_interval_start = min(lower_interval_end-timeunit, from_time_boundary * timeunit)
+            lower_interval_end = until_time_boundary * timeunit
+            lower_interval_start = min(lower_interval_end-timeunit, from_time_boundary*timeunit)
         else:
             lower_interval_end = roundup(until_time, lower['sec_per_point'])
             lower_interval_start = from_time - from_time % lower['sec_per_point']
@@ -413,6 +421,7 @@ class Storage(object):
                                                          higher_base_interval,
                                                          header,
                                                          higher)
+
         higher_point_num = (lower_interval_end - lower_interval_start) / higher['sec_per_point']
         higher_size = higher_point_num * header['point_size']
         relative_first_offset = higher_first_offset - higher['offset']
@@ -428,7 +437,7 @@ class Storage(object):
             higher_end = higher['offset'] + higher['size']
             series_str = fh.read(higher_end - higher_first_offset)
             fh.seek(higher['offset'])
-            series_str = fh.read(higher_last_offset - higher['offset'])
+            series_str += fh.read(higher_last_offset - higher['offset'])
 
         # now we unpack the series data we just read
         point_format = header['point_format']
@@ -438,11 +447,20 @@ class Storage(object):
         series_format = byte_order + (point_type * point_num)
         unpacked_series = struct.unpack(series_format, series_str)
 
+        ts = unpacked_series[0]
+        idx = 0
+        step = len(header['tag_list']) + 1
+        for i in xrange(0, len(unpacked_series), step):
+            if ts > unpacked_series[i]:
+                idx = i
+                break
+        unpacked_series = unpacked_series[idx:]
+
         # and finally we construct a list of values
+        point_cnt = (lower_interval_end - lower_interval_start) / lower['sec_per_point']
         tag_cnt = len(header['tag_list'])
         agg_cnt = lower['sec_per_point'] / higher['sec_per_point']
         step = (tag_cnt + 1) * agg_cnt
-        point_cnt = (lower_interval_end - lower_interval_start) / lower['sec_per_point']
         lower_points = [None] * point_cnt
 
         unpacked_series = unpacked_series[::-1]
