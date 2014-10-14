@@ -14,6 +14,7 @@
 #
 
 import os
+import re
 import time
 import numpy as np
 import math
@@ -44,8 +45,10 @@ ARCHIVEINFO_SIZE = struct.calcsize(ARCHIVEINFO_FORMAT)
 class KenshinException(Exception):
     pass
 
-
 class InvalidTime(KenshinException):
+    pass
+
+class InvalidConfig(KenshinException):
     pass
 
 
@@ -64,30 +67,92 @@ def enable_debug(ignore_header=False):
     """
     global open, debug
 
-    def debug(msg):
-        print "DEBUG :: %s" % msg
+    if not ignore_header:
+        def debug(msg):
+            print "DEBUG :: %s" % msg
 
     class open(file):
         write_cnt = 0
         read_cnt = 0
 
         def __init__(self, *args, **kwargs):
+            caller = self.get_caller()
+            debug("=========== open in %s ===========" % caller)
             file.__init__(self, *args, **kwargs)
 
         def write(self, data):
-            caller = inspect.stack()[1][3]
+            caller = self.get_caller()
             open.write_cnt += 1
             debug("Write %d bytes #%d in %s" % (len(data), self.write_cnt, caller))
             return file.write(self, data)
 
         def read(self, bytes):
-            caller = inspect.stack()[1][3]
+            caller = self.get_caller()
             if ignore_header and caller == "header":
                 pass
             else:
                 open.read_cnt += 1
             debug("Read %d bytes #%d in %s" % (bytes, self.read_cnt, caller))
             return file.read(self, bytes)
+
+        def get_caller(self):
+            return inspect.stack()[2][3]
+
+
+### retention parser
+
+class RetentionParser(object):
+    TIME_UNIT = {
+        'seconds': 1,
+        'minutes': 60,
+        'hours': 3600,
+        'days': 86400,
+        'weeks': 86400 * 7,
+        'years': 86400 * 365,
+    }
+    # time pattern (e.g. 60s, 12h)
+    pat = re.compile(r'^(\d+)([a-z]+)$')
+
+    @classmethod
+    def get_time_unit_name(cls, s):
+        for k in cls.TIME_UNIT.keys():
+            if k.startswith(s):
+                return k
+        raise InvalidTime("Invalid time unit: '%s'" % s)
+
+    @classmethod
+    def get_seconds(cls, time_unit):
+        return cls.TIME_UNIT[cls.get_time_unit_name(time_unit)]
+
+    @classmethod
+    def parse_time_str(cls, s):
+        """
+        Parse time string to seconds.
+
+        >>> RetentionParser.parse_time_str('12h')
+        43200
+        """
+        if s.isdigit():
+            return int(s)
+
+        m = cls.pat.match(s)
+        if m:
+            num, unit = m.groups()
+            return int(num) * cls.get_seconds(unit)
+        else:
+            raise InvalidTime("Invalid rention specification '%s'" % s)
+
+    @classmethod
+    def parse_retention_def(cls, retention_def):
+        precision, point_cnt = retention_def.strip().split(':')
+        precision = cls.parse_time_str(precision)
+
+        if point_cnt.isdigit():
+            point_cnt = int(point_cnt)
+        else:
+            point_cnt = cls.parse_time_str(point_cnt) / precision
+
+        return precision, point_cnt
 
 
 ### Storage
@@ -99,8 +164,9 @@ class Storage(object):
 
     def create(self, metric_name, tag_list, archive_list, x_files_factor=None,
                agg_name=None):
-        path = self.gen_path(self.data_dir, metric_name)
+        Storage.validate_archive_list(archive_list, x_files_factor)
 
+        path = self.gen_path(self.data_dir, metric_name)
         if os.path.exists(path):
             raise IOError('file %s already exits.' % path)
         else:
@@ -119,6 +185,59 @@ class Storage(object):
                 f.write(zeroes)
                 remaining -= chunk_size
             f.write(zeroes[:remaining])
+
+    @staticmethod
+    def validate_archive_list(archive_list, xff):
+        """
+        Validates an archive_list.
+
+        An archive_list must:
+        1. Have at least one archive config.
+        2. No duplicates.
+        3. Higher precision archives' precision must evenly divide
+           all lower precison archives' precision.
+        4. Lower precision archives must cover larger time intervals
+           than higher precision archives.
+        5. Each archive must have at least enough points to the next
+           archive.
+        """
+
+        # 1
+        if not archive_list:
+            raise InvalidConfig("must specify at least one archive config")
+
+        archive_list.sort(key=operator.itemgetter(0))
+
+        for i, archive in enumerate(archive_list):
+            try:
+                next_archive = archive_list[i+1]
+            except:
+                break
+            # 2
+            if not archive[0] < next_archive[0]:
+                raise InvalidConfig("two same precision config: '%s' and '%s'" %
+                                    (archive, next_archive))
+            # 3
+            if next_archive[0] % archive[0] != 0:
+                raise InvalidConfig("higher precision must evenly divide lower "
+                                    "precision: %s and %s" %
+                                    (archive[0], next_archive[0]))
+            # 4
+            retention = archive[0] * archive[1]
+            next_retention = next_archive[0] * next_archive[1]
+            if not next_retention > retention:
+                raise InvalidConfig("lower precision archive must cover "
+                                    "larger time intervals that higher "
+                                    "precision archive: (%d, %s) and (%d, %s)" %
+                                    (i, retention, i+1, next_retention))
+            # 5
+            archive_point_cnt = archive[1]
+            point_per_consolidation = next_archive[0] / archive[0]
+            if not (archive_point_cnt / xff) >= point_per_consolidation:
+                raise InvalidConfig("each archive must have at least enough "
+                                    "points to consolidate to the next archive: "
+                                    "(%d, %s) and (%d, %s) xff=%s" %
+                                    (i, retention, i+1, next_retention, xff))
 
     @staticmethod
     def gen_path(data_dir, metric_name):
@@ -281,13 +400,12 @@ class Storage(object):
                                                   header['x_files_factor'])
         from_time_boundary = from_time / timeunit
         until_time_boundary = until_time / timeunit
-        if from_time_boundary == until_time_boundary:
+        if (from_time_boundary == until_time_boundary) and (from_time % timeunit) != 0:
             return False
 
         if lower['sec_per_point'] <= timeunit:
-            lower_interval_end = roundup(until_time, timeunit)
-            # lower_interval_start = min(lower_interval_end-timeunit, roundup(from_time, timeunit))
-            lower_interval_start = min(lower_interval_end-timeunit, from_time_boundary * timeunit)
+            lower_interval_end = until_time_boundary * timeunit
+            lower_interval_start = min(lower_interval_end-timeunit, from_time_boundary*timeunit)
         else:
             lower_interval_end = roundup(until_time, lower['sec_per_point'])
             lower_interval_start = from_time - from_time % lower['sec_per_point']
@@ -303,6 +421,7 @@ class Storage(object):
                                                          higher_base_interval,
                                                          header,
                                                          higher)
+
         higher_point_num = (lower_interval_end - lower_interval_start) / higher['sec_per_point']
         higher_size = higher_point_num * header['point_size']
         relative_first_offset = higher_first_offset - higher['offset']
@@ -318,7 +437,7 @@ class Storage(object):
             higher_end = higher['offset'] + higher['size']
             series_str = fh.read(higher_end - higher_first_offset)
             fh.seek(higher['offset'])
-            series_str = fh.read(higher_last_offset - higher['offset'])
+            series_str += fh.read(higher_last_offset - higher['offset'])
 
         # now we unpack the series data we just read
         point_format = header['point_format']
@@ -328,11 +447,20 @@ class Storage(object):
         series_format = byte_order + (point_type * point_num)
         unpacked_series = struct.unpack(series_format, series_str)
 
+        ts = unpacked_series[0]
+        idx = 0
+        step = len(header['tag_list']) + 1
+        for i in xrange(0, len(unpacked_series), step):
+            if ts > unpacked_series[i]:
+                idx = i
+                break
+        unpacked_series = unpacked_series[idx:]
+
         # and finally we construct a list of values
+        point_cnt = (lower_interval_end - lower_interval_start) / lower['sec_per_point']
         tag_cnt = len(header['tag_list'])
         agg_cnt = lower['sec_per_point'] / higher['sec_per_point']
         step = (tag_cnt + 1) * agg_cnt
-        point_cnt = (lower_interval_end - lower_interval_start) / lower['sec_per_point']
         lower_points = [None] * point_cnt
 
         unpacked_series = unpacked_series[::-1]
