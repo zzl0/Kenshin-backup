@@ -31,27 +31,29 @@ class TestStorageIO(unittest.TestCase):
 
     def _basic_setup(self):
         metric_name = 'sys.cpu.user'
+        self.file_cnt = 40
 
-        tag_list = [
-            'host=webserver01,cpu=0',
-            'host=webserver01,cpu=1',
-        ]
+        tag_list = ['host=webserver%s,cpu=%s' % (i, i)
+                    for i in range(self.file_cnt)]
         archive_list = "1s:1h,60s:2d,300s:7d,15m:25w,12h:5y".split(',')
         archive_list = [RetentionParser.parse_retention_def(x)
                         for x in archive_list]
 
-        x_files_factor = 40
+        x_files_factor = 20
         agg_name = 'min'
         return [metric_name, tag_list, archive_list, x_files_factor, agg_name]
 
     def _gen_val(self, i):
-        return (i, 10+i)
+        res = []
+        for j in range(self.file_cnt):
+            res.append(i + 10*j)
+        return tuple(res)
 
     def test_io(self):
         """
         test io perfermance.
 
-        (1000 io/s * 3600 s * 24) / (3*10**6 metric) / (30 metric/file) = 576 io/file
+        (1000 io/s * 3600 s * 24) / (3*10**6 metric) / (40 metric/file) = 1152 io/file
         由于 header 函数在一次写入中被调用了多次，而 header 数据较小，完全可以读取缓存数据，
         因此 enable_debug 中忽略了 header 的读操作。
         """
@@ -69,5 +71,5 @@ class TestStorageIO(unittest.TestCase):
 
         open_ = kenshin.storage.open
         io = open_.read_cnt + open_.write_cnt
-        io_limit = 576
+        io_limit = 1152
         self.assertLessEqual(io, io_limit)
