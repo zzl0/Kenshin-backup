@@ -13,7 +13,7 @@ config = {
     'author_email': 'zhuzhaolong0@gmail.com',
     'version': '0.1',
     'install_requires': ['nose'],
-    'packages': ['kenshin'],
+    'packages': ['kenshin', 'rurouni'],
     'scripts': [],
     'name': 'kenshin'
 }
