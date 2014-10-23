@@ -1,0 +1,23 @@
+- job:
+    name: unittest
+    desciption: 'kenshin'
+    scm:
+      - git:
+          branches:
+            - master
+          skip-tag: True
+          url: http://code.dapps.douban.com/Kenshin.git
+    builders:
+      - shell: |
+          rm -rf venv
+          virtualenv venv || true
+          source venv/bin/activate
+          pip install -i http://pypim.dapps.douban.com/simple -r requirements.txt
+          python setup.py install
+          nosetests --with-xunit --xunit-file=unittest.xml
+          deactivate
+    publishers:
+      - junit:
+          results: unittest.xml
+      - email:
+          recipients: zhuzhaolong@douban.com
