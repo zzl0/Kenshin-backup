@@ -1,13 +1,16 @@
 # coding: utf-8
 from twisted.python import log
 from twisted.application import internet, service
+from twisted.application.internet import TCPServer
 from twisted.plugin import IPlugin
 from twisted.internet.protocol import ServerFactory
 
 from rurouni import protocols
+from rurouni import state
+from rurouni.conf import settings
 
 
-### root serverice
+### root serveice
 
 class RurouniRootService(service.MultiService):
     """ Root Service that properly configure twistd logging.
@@ -25,9 +28,28 @@ def createBaseService(options):
 
     factory = ServerFactory()
     factory.protocol = protocols.MetricLineReceiver
+    service = TCPServer(int(settings.LINE_RECEIVER_PORT), factory,
+                        interface=settings.LINE_RECEIVER_INTERFACE)
+    service.setServiceParent(root_service)
 
-    service = internet.TCPServer(int(options['port']), factory,
-                                interface=options['iface'])
+    return root_service
+
+
+def createCacheService(options):
+    from rurouni.cache import MetricCache
+    from rurouni.protocols import CacheReceiver
+
+    state.events.metricReceived.addHandler(MetricCache.store)
+    root_service = createBaseService(options)
+
+    factory = ServerFactory()
+    factory.protocol = CacheReceiver
+    service = TCPServer(int(settings.CACHE_QUERY_PORT), factory,
+                        interface=settings.CACHE_QUERY_INTERFACE)
+    service.setServiceParent(root_service)
+
+    from rurouni.writer import WriterService
+    service = WriterService()
     service.setServiceParent(root_service)
 
     return root_service
