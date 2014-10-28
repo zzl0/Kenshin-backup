@@ -16,7 +16,7 @@ class RurouniServiceMaker(object):
     options = conf.Options
 
     def makeService(self, options):
-        return service.createBaseService(options)
+        return service.createCacheService(options)
 
 
 serviceMaker = RurouniServiceMaker()
