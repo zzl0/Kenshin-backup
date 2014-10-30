@@ -1,10 +1,10 @@
 # coding: utf-8
-from twisted.python import log
 from twisted.internet.protocol import Protocol, ServerFactory
 from twisted.protocols.basic import LineOnlyReceiver, Int32StringReceiver
 from twisted.internet.error import ConnectionDone
 
 from rurouni.state import events
+from rurouni import log
 
 
 ### metric receiver
@@ -22,8 +22,8 @@ class MetricReceiver:
         else:
             return 'peer'
 
-    def metricReceived(self, metric, datapoint):
-        events.metricReceived(metric, datapoint)
+    def metricReceived(self, metric, tags, datapoint):
+        events.metricReceived(metric, tags, datapoint)
 
 
 class MetricLineReceiver(MetricReceiver, LineOnlyReceiver):
@@ -31,13 +31,13 @@ class MetricLineReceiver(MetricReceiver, LineOnlyReceiver):
 
     def lineReceived(self, line):
         try:
-            metric, value, timestamp = line.strip().split()
-            datapoint = (float(timestamp), float(value))
+            metric, tags, value, timestamp = line.strip().split()
+            datapoint = (int(timestamp), float(value))
         except:
             log.msg('invalid line (%s) received from client %s' %
                     (line, self.peerName))
             return
-        self.metricReceived(metric, datapoint)
+        self.metricReceived(metric, tags, datapoint)
 
 
 class CacheReceiver(Int32StringReceiver):
