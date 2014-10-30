@@ -10,12 +10,17 @@ RUROUNI_SERVER = '127.0.0.1'
 RUROUNI_PORT = 2003
 DELAY = 60
 
+idx = 0
 
 def get_loadavg():
     cmd = 'uptime'
     output = subprocess.check_output(cmd, shell=True).strip()
     output = re.split("\s+", output)
-    return output[-3:]
+    # return output[-3:]
+    # 发送伪造数据，容易肉眼验证处理结果是否正确
+    global idx
+    idx += 1
+    return idx, 100+idx, 200+idx
 
 
 def run(sock, delay):
@@ -26,7 +31,7 @@ def run(sock, delay):
         lines = []
         idx2min = [1, 5, 15]
         for i, val in enumerate(loadavg):
-            line = "system.loadavg_%dmin %s %d" % (idx2min[i], val, now)
+            line = "system.loadavg min=%s %s %d" % (idx2min[i], val, now)
             lines.append(line)
         msg = '\n'.join(lines) + '\n'  # all lines must end in a newline
         print 'sending message'

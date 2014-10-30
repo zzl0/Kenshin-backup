@@ -1,12 +1,11 @@
 # coding: utf-8
-from twisted.python import log
 from twisted.application import internet, service
 from twisted.application.internet import TCPServer
 from twisted.plugin import IPlugin
 from twisted.internet.protocol import ServerFactory
 
 from rurouni import protocols
-from rurouni import state
+from rurouni import state, log
 from rurouni.conf import settings
 
 

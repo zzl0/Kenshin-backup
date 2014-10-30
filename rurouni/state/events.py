@@ -1,9 +1,7 @@
 # coding: utf-8
-
-from twisted.python import log
 from twisted.python.failure import Failure
 
-from rurouni import state
+from rurouni import state, log
 from rurouni.state import instrumentation
 
 
@@ -32,7 +30,7 @@ class Event(object):
 
 
 metricReceived = Event('metricReceived',
-                       lambda metric, datapoint: instrumentation.incr('metricReceived'))
+                       lambda *a: instrumentation.incr('metricReceived'))
 
 cacheFull = Event('cacheFull')
 cacheFull.addHandler(lambda: instrumentation.incr('cache.overflow'))
