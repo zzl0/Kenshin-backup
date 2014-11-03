@@ -35,7 +35,7 @@ class MetricData(object):
     - each row represent a specific tags.
     - each col represent values of different timestamps.
 
-    Acturally we use one-dimention list to implement above structure.
+    Actually we use one-dimention list to implement above structure.
     """
 
     def __init__(self, tags_num=None, resolution=None, retention=None):
