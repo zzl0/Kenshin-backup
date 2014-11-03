@@ -58,7 +58,6 @@ def writeCachedDataPoints():
                     break
             kenshin.create(file_path, tags, schema.archives, schema.xFilesFactor,
                            schema.aggregationMethod)
-        log.msg('file path: %s, data: %s' % (file_path, datapoints))
         kenshin.update(file_path, datapoints)
 
     return True
