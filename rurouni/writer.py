@@ -1,11 +1,17 @@
 # coding: utf-8
+import os
 import time
 
 from twisted.application.service import Service
 from twisted.internet import reactor
 
+from kenshin.storage import Storage
 from rurouni.cache import MetricCache
 from rurouni import log
+from rurouni.storage import getFilePath, loadStorageSchemas
+
+
+schemas = loadStorageSchemas()
 
 
 class WriterService(Service):
@@ -24,20 +30,38 @@ class WriterService(Service):
 def writeForever():
     while reactor.running:
         try:
-            writeCachedDataPoints()
+            write = writeCachedDataPoints()
         except Exception as e:
             log.err('write error: %s' % e)
             raise e
-        # The writer thread only sleeps when cache is empty
+        # The writer thread only sleeps when there is no write
         # or an error occurs
-        time.sleep(1)
+        if not write:
+            time.sleep(1)
 
 
 def writeCachedDataPoints():
     metrics = MetricCache.counts()
-    log.msg("write metrics: %s" % metrics)
+    if not metrics:
+        return False
 
     for metric, idx in metrics:
-        datapoints = MetricCache.pop(metric, idx)
+        tags, datapoints = MetricCache.pop(metric, idx)
         log.msg('write metric: %s, datapoints: %s' % (metric, datapoints))
-        time.sleep(1)
+        file_path = getFilePath(metric, idx)
+
+        if not os.path.exists(file_path):
+            for schema in schemas:
+                if schema.match(metric):
+                    log.creates('new metric file %s-%d matched schema %s' %
+                                (metric, idx, schema.name))
+                    break
+            globalStorage.create(file_path, tags, schema.archives, schema.xFilesFactor,
+                           schema.aggregationMethod)
+        log.msg('file path: %s, data: %s' % (file_path, datapoints))
+        globalStorage.update(file_path, datapoints)
+
+    return True
+
+
+globalStorage = Storage()

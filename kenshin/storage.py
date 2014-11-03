@@ -159,7 +159,7 @@ class RetentionParser(object):
 
 class Storage(object):
 
-    def __init__(self, data_dir):
+    def __init__(self, data_dir=''):
         self.data_dir = data_dir
 
     def create(self, metric_name, tag_list, archive_list, x_files_factor=None,
@@ -247,6 +247,8 @@ class Storage(object):
         eg, metric_name is `sys.cpu.user`, the absolute file path will be
         `self.data_dir/sys/cpu/user.hs`
         """
+        if metric_name[0] == '/':
+            return metric_name
         parts = metric_name.split('.')
         parts[-1] = parts[-1] + '.hs'
         file_path = os.path.sep.join(parts)
