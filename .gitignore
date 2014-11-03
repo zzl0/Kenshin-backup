@@ -55,3 +55,6 @@ target/
 
 # twisted plugin
 *.cache
+
+# test data
+data/

@@ -35,7 +35,7 @@ class MetricData(object):
     - each row represent a specific tags.
     - each col represent values of different timestamps.
 
-    Acturally we use one-dimention list to implement above structure.
+    Actually we use one-dimention list to implement above structure.
     """
 
     def __init__(self, tags_num=None, resolution=None, retention=None):
@@ -52,6 +52,9 @@ class MetricData(object):
         self.start_idx = 0
         self.can_write = False
         self.too_full = False
+
+    def get_tags_list(self):
+        return self.tags_dict.keys() + ['N'] * (self.tags_num - self.size())
 
     def full(self):
         return len(self.tags_dict) == self.tags_num
@@ -115,7 +118,7 @@ class MetricData(object):
         else:  # wrap around
             length = self.points_num_max - begin_idx + end_idx
             for i, (_, base_idx) in enumerate(self.tags_dict.items()):
-                val = self.points[base_idx+begin_idx: base_idx+begin_idx+self.points_num_max]
+                val = self.points[base_idx+begin_idx: base_idx+self.points_num_max]
                 val += self.points[base_idx: base_idx+end_idx]
                 rs[i] = val
 
@@ -132,7 +135,10 @@ class MetricData(object):
             self.start_idx = end_idx
             self.start_ts = self.start_ts + self.resolution * length
             self.clearWriteFlag()
-        return zip(timestamps, zip(*rs))
+
+        log.debug(rs)
+        tags_list = self.get_tags_list()
+        return tags_list, zip(timestamps, zip(*rs))
 
 
 class MetricCache(dict):
@@ -180,9 +186,9 @@ class MetricCache(dict):
         try:
             self.lock.acquire()
             metric_data = self.cache[metric][metric_data_idx]
-            datapoints = metric_data.read(clear=True)
+            tags, datapoints = metric_data.read(clear=True)
             log.debug("canWrite: %s" % metric_data.canWrite())
-            return datapoints
+            return tags, datapoints
         finally:
             self.lock.release()
 
