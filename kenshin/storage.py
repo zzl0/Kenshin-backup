@@ -59,7 +59,7 @@ debug = lambda *a, **kw: None
 
 def enable_debug(ignore_header=False):
     """
-    调式读写操作.
+    监控读写操作.
 
     由于 header 函数在一次写入中被调用了多次，而 header 数据较小，完全可以读取缓存数据，
     因此 enable_debug 中使用 ignore_header 来忽略了 header 的读操作，从而方便 io

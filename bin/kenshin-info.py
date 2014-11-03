@@ -2,8 +2,8 @@
 # coding: utf-8
 
 
-from kenshin.storage import Storage
 from pprint import pprint
+import kenshin
 
 
 if __name__ == '__main__':
@@ -13,4 +13,4 @@ if __name__ == '__main__':
         sys.exit(1)
     path = sys.argv[1]
     with open(path) as f:
-        pprint(Storage.header(f))
+        pprint(kenshin.header(f))
