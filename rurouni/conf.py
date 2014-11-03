@@ -43,6 +43,8 @@ class Settings(object):
     CONF_DIR = '/Users/zzl/projects/bigdata/Kenshin/conf/'
     LOCAL_DATA_DIR = '/Users/zzl/projects/bigdata/Kenshin/data/'
 
+    METRICS_FILE = '/Users/zzl/projects/bigdata/Kenshin/data/metrics'
+
 
 settings = Settings()
 

@@ -1,5 +1,5 @@
 # coding: utf-8
-
+import os
 from threading import Lock
 from collections import OrderedDict
 
@@ -52,6 +52,10 @@ class MetricData(object):
         self.start_idx = 0
         self.can_write = False
         self.too_full = False
+
+    def init_tags(self, tags_list):
+        for i, tags in enumerate(tags_list):
+            self.tags_dict[tags] = i * self.points_num_max
 
     def get_tags_list(self):
         return self.tags_dict.keys() + ['N'] * (self.tags_num - self.size())
@@ -154,12 +158,28 @@ class MetricCache(dict):
     def __init__(self):
         self.size = 0
         self.lock = Lock()
-        self.cache = self.initCache()
+        self.cache = {}
+        self.initCache()
+        self.metrics_fh = open(settings.METRICS_FILE, 'a')
 
     def initCache(self):
-        return {}
+        metrics_file = settings.METRICS_FILE
+        if not os.path.exists(metrics_file):
+            return
+        with open(metrics_file) as f:
+            rs = {}
+            for line in f:
+                metric, tags = line.rstrip('\n').split('\t')
+                rs.setdefault(metric, [])
+                rs[metric].append(tags)
+            for metric, tags_list in rs.items():
+                self.cache[metric] = []
+                for i in range(0, len(tags_list), DEFAULT_TAGS_NUM):
+                    metric_data = MetricData()
+                    metric_data.init_tags(tags_list[i:DEFAULT_TAGS_NUM])
+                    self.cache[metric].append(metric_data)
 
-    def store(self, metric, tags, datapoint):
+    def store(self, metric, tags, datapoint=None):
         log.msg("MetricCache received (%s, %s, %s)" % (metric, tags, datapoint))
         try:
             self.lock.acquire()
@@ -171,16 +191,21 @@ class MetricCache(dict):
                         flag = True
                         break
 
-                if not flag and metric_data.full():
-                    metric_data = MetricData()
-                    metric_data_list.append(metric_data)
-                metric_data.add(tags, datapoint)
+                if not flag:
+                    self._record_new_metric(metric, tags)
+                    if metric_data.full():
+                        metric_data = MetricData()
+                        metric_data_list.append(metric_data)
             else:
+                self._record_new_metric(metric, tags)
                 metric_data = MetricData()
-                metric_data.add(tags, datapoint)
                 self.cache[metric] = [metric_data]
+            metric_data.add(tags, datapoint)
         finally:
             self.lock.release()
+
+    def _record_new_metric(self, metric, tags):
+        self.metrics_fh.write('%s\t%s\n' % (metric, tags))
 
     def pop(self, metric, metric_data_idx):
         try:

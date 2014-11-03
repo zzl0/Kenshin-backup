@@ -12,7 +12,6 @@ from rurouni.conf import settings, OrderedConfigParser
 
 
 STORAGE_SCHEMAS_CONFIG = join(settings.CONF_DIR, 'storage-schemas.conf')
-STORAGE_AGGREGATION_CONFIG = join(settings.CONF_DIR, 'storage-aggregation.conf')
 
 
 def getFilePath(metric, tags_idx):
