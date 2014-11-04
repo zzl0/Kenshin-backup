@@ -2,7 +2,7 @@
 # coding: utf-8
 
 import time
-from kenshin.storage import Storage
+import kenshin
 
 
 if __name__ == '__main__':
@@ -17,4 +17,10 @@ if __name__ == '__main__':
     except:
         now_ts = int(time.time())
 
-    print Storage().fetch(path, from_ts, now_ts, now_ts)
+    timeinfo, points = kenshin.fetch(path, from_ts, now_ts, now_ts)
+    start, end, step = timeinfo
+
+    t = start
+    for p in points:
+        print '%s\t%s' % (t, p)
+        t += step

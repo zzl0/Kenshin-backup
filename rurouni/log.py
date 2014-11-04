@@ -57,7 +57,7 @@ def formatEvent(event, includeType=False):
         type_tag = ''
 
     timestamp = time.strftime("%d/%m/%Y %H:%M:%S")
-    return "%s :: %s%s" % (timestamp, type_tag, msg)
+    return "%s\t%s\t%s" % (timestamp, type_tag, msg)
 
 
 rurouniLogObserver = RurouniLogObserver()
@@ -75,8 +75,8 @@ def clients(message, **context):
     msg(message, **context)
 
 def creates(message, **context):
-  context['type'] = 'creates'
-  msg(message, **context)
+    context['type'] = 'creates'
+    msg(message, **context)
 
 def updates(message, **context):
     context['type'] = 'updates'

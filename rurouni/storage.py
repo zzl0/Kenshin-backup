@@ -6,13 +6,12 @@ from os.path import join, sep
 from ConfigParser import ConfigParser
 from collections import OrderedDict
 
-from kenshin.storage import RetentionParser, Storage, InvalidConfig
+import kenshin
 from rurouni import log
 from rurouni.conf import settings, OrderedConfigParser
 
 
 STORAGE_SCHEMAS_CONFIG = join(settings.CONF_DIR, 'storage-schemas.conf')
-STORAGE_AGGREGATION_CONFIG = join(settings.CONF_DIR, 'storage-aggregation.conf')
 
 
 def getFilePath(metric, tags_idx):
@@ -33,7 +32,7 @@ class Archive:
 
     @staticmethod
     def fromString(retentionDef):
-        rs = RetentionParser.parse_retention_def(retentionDef)
+        rs = kenshin.parse_retention_def(retentionDef)
         return Archive(*rs)
 
 
@@ -80,8 +79,8 @@ def loadStorageSchemas():
         archives = [Archive.fromString(s).getTuple() for s in retentions]
 
         try:
-            Storage.validate_archive_list(archives, xff)
-        except InvalidConfig as e:
+            kenshin.validate_archive_list(archives, xff)
+        except kenshin.InvalidConfig as e:
             log.err("Invalid schema found in %s." % section)
 
         schema = PatternSchema(section, pattern, float(xff), agg, archives)

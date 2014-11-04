@@ -5,7 +5,7 @@ import time
 from twisted.application.service import Service
 from twisted.internet import reactor
 
-from kenshin.storage import Storage
+import kenshin
 from rurouni.cache import MetricCache
 from rurouni import log
 from rurouni.storage import getFilePath, loadStorageSchemas
@@ -56,12 +56,8 @@ def writeCachedDataPoints():
                     log.creates('new metric file %s-%d matched schema %s' %
                                 (metric, idx, schema.name))
                     break
-            globalStorage.create(file_path, tags, schema.archives, schema.xFilesFactor,
+            kenshin.create(file_path, tags, schema.archives, schema.xFilesFactor,
                            schema.aggregationMethod)
-        log.msg('file path: %s, data: %s' % (file_path, datapoints))
-        globalStorage.update(file_path, datapoints)
+        kenshin.update(file_path, datapoints)
 
     return True
-
-
-globalStorage = Storage()

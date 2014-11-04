@@ -1,5 +1,5 @@
 # coding: utf-8
-
+import os
 from threading import Lock
 from collections import OrderedDict
 
@@ -42,6 +42,7 @@ class MetricData(object):
         self.tags_num = tags_num or DEFAULT_TAGS_NUM
         self.resolution = resolution or DEFAULT_RESOLUTION
         self.retention = retention or DEFAULT_RETENTION
+        self.lock = Lock()
 
         self.points_num = self.retention / self.resolution
         self.points_num_max = int(self.points_num * 1.2)
@@ -53,6 +54,10 @@ class MetricData(object):
         self.can_write = False
         self.too_full = False
 
+    def init_tags(self, tags_list):
+        for i, tags in enumerate(tags_list):
+            self.tags_dict[tags] = i * self.points_num_max
+
     def get_tags_list(self):
         return self.tags_dict.keys() + ['N'] * (self.tags_num - self.size())
 
@@ -60,7 +65,11 @@ class MetricData(object):
         return len(self.tags_dict) == self.tags_num
 
     def canWrite(self):
-        return self.can_write
+        try:
+            self.lock.acquire()
+            return self.can_write
+        finally:
+            self.lock.release()
 
     def clearWriteFlag(self):
         self.can_write = False
@@ -69,27 +78,30 @@ class MetricData(object):
         return len(self.tags_dict)
 
     def add(self, tags, datapoint):
-        if tags not in self.tags_dict:
-            self.tags_dict[tags] = self.size() * self.points_num_max
+        try:
+            self.lock.acquire()
+            if tags not in self.tags_dict:
+                self.tags_dict[tags] = self.size() * self.points_num_max
 
-        base_idx = self.tags_dict[tags]
-        ts, val = datapoint
+            base_idx = self.tags_dict[tags]
+            ts, val = datapoint
 
-        # TODO: lock start_ts
-        if self.start_ts is None:
-            self.start_ts = ts - ts % self.resolution
-            self.start_idx = base_idx
-            offset = 0
-        else:
-            offset = (ts - self.start_ts) / self.resolution
-        idx = base_idx + (self.start_idx + offset) % self.points_num_max
+            if self.start_ts is None:
+                self.start_ts = ts - ts % self.resolution
+                self.start_idx = base_idx
+                offset = 0
+            else:
+                offset = (ts - self.start_ts) / self.resolution
+            idx = base_idx + (self.start_idx + offset) % self.points_num_max
 
-        if ts - self.start_ts - self.retention >= 0:  # 等待 30 秒
-            self.can_write = True
+            if ts - self.start_ts - self.retention >= 0:  # 等待 30 秒
+                self.can_write = True
 
-        log.debug("add idx: %s, start_ts: %s, start_idx: %s" % (
-                   idx, self.start_ts, self.start_idx))
-        self.points[idx] = val
+            log.debug("add idx: %s, start_ts: %s, start_idx: %s" % (
+                       idx, self.start_ts, self.start_idx))
+            self.points[idx] = val
+        finally:
+            self.lock.release()
 
     def get_idx(self, timestamp):
         relative_idx = self.start_idx + (timestamp - self.start_ts) / self.resolution
@@ -99,46 +111,48 @@ class MetricData(object):
         return timestamp - (timestamp % self.resolution)
 
     def read(self, begin_ts=None, end_ts=None, clear=False):
-        begin_ts = begin_ts or self.start_ts
-        begin_idx = self.get_idx(begin_ts)
-        if end_ts:
-            end_idx = self.get_idx(end_ts)
-        else:
-            end_idx = (begin_idx+self.points_num) % self.points_num_max
+        try:
+            self.lock.acquire()
+            begin_ts = begin_ts or self.start_ts
+            begin_idx = self.get_idx(begin_ts)
+            if end_ts:
+                end_idx = self.get_idx(end_ts)
+            else:
+                end_idx = (begin_idx+self.points_num) % self.points_num_max
 
-        log.debug("begin_idx: %s, end_idx: %s, points_num: %s, points_num_max: %s" % (
-                   begin_idx, end_idx, self.points_num, self.points_num_max))
+            log.debug("begin_idx: %s, end_idx: %s, points_num: %s, points_num_max: %s" % (
+                       begin_idx, end_idx, self.points_num, self.points_num_max))
 
-        rs = [None] * self.tags_num
-        if begin_idx < end_idx:
-            length = end_idx - begin_idx
-            for i, (_, base_idx) in enumerate(self.tags_dict.items()):
-                val = self.points[base_idx+begin_idx: base_idx+end_idx]
-                rs[i] = val
-        else:  # wrap around
-            length = self.points_num_max - begin_idx + end_idx
-            for i, (_, base_idx) in enumerate(self.tags_dict.items()):
-                val = self.points[base_idx+begin_idx: base_idx+self.points_num_max]
-                val += self.points[base_idx: base_idx+end_idx]
-                rs[i] = val
+            rs = [None] * self.tags_num
+            if begin_idx < end_idx:
+                length = end_idx - begin_idx
+                for i, (_, base_idx) in enumerate(self.tags_dict.items()):
+                    val = self.points[base_idx+begin_idx: base_idx+end_idx]
+                    rs[i] = val
+            else:  # wrap around
+                length = self.points_num_max - begin_idx + end_idx
+                for i, (_, base_idx) in enumerate(self.tags_dict.items()):
+                    val = self.points[base_idx+begin_idx: base_idx+self.points_num_max]
+                    val += self.points[base_idx: base_idx+end_idx]
+                    rs[i] = val
 
-        # empty tags
-        for j in range(i+1, self.tags_num):
-            rs[j] = [0] * length
+            # empty tags
+            for j in range(i+1, self.tags_num):
+                rs[j] = [0] * length
 
-        # timestamps
-        begin_ts = self.align_timestamp(begin_ts)
-        timestamps = [begin_ts + i * self.resolution for i in range(length)]
+            # timestamps
+            begin_ts = self.align_timestamp(begin_ts)
+            timestamps = [begin_ts + i * self.resolution for i in range(length)]
 
-        # TODO: lock start_ts
-        if clear:
-            self.start_idx = end_idx
-            self.start_ts = self.start_ts + self.resolution * length
-            self.clearWriteFlag()
+            if clear:
+                self.start_idx = end_idx
+                self.start_ts = self.start_ts + self.resolution * length
+                self.clearWriteFlag()
 
-        log.debug(rs)
-        tags_list = self.get_tags_list()
-        return tags_list, zip(timestamps, zip(*rs))
+            tags_list = self.get_tags_list()
+            return tags_list, zip(timestamps, zip(*rs))
+        finally:
+            self.lock.release()
 
 
 class MetricCache(dict):
@@ -153,13 +167,29 @@ class MetricCache(dict):
     """
     def __init__(self):
         self.size = 0
+        self.cache = {}
+        self.initCache()
         self.lock = Lock()
-        self.cache = self.initCache()
+        self.metrics_fh = open(settings.METRICS_FILE, 'a')
 
     def initCache(self):
-        return {}
+        metrics_file = settings.METRICS_FILE
+        if not os.path.exists(metrics_file):
+            return
+        with open(metrics_file) as f:
+            rs = {}
+            for line in f:
+                metric, tags = line.rstrip('\n').split('\t')
+                rs.setdefault(metric, [])
+                rs[metric].append(tags)
+            for metric, tags_list in rs.items():
+                self.cache[metric] = []
+                for i in range(0, len(tags_list), DEFAULT_TAGS_NUM):
+                    metric_data = MetricData()
+                    metric_data.init_tags(tags_list[i:DEFAULT_TAGS_NUM])
+                    self.cache[metric].append(metric_data)
 
-    def store(self, metric, tags, datapoint):
+    def store(self, metric, tags, datapoint=None):
         log.msg("MetricCache received (%s, %s, %s)" % (metric, tags, datapoint))
         try:
             self.lock.acquire()
@@ -171,35 +201,33 @@ class MetricCache(dict):
                         flag = True
                         break
 
-                if not flag and metric_data.full():
-                    metric_data = MetricData()
-                    metric_data_list.append(metric_data)
-                metric_data.add(tags, datapoint)
+                if not flag:
+                    self._record_new_metric(metric, tags)
+                    if metric_data.full():
+                        metric_data = MetricData()
+                        metric_data_list.append(metric_data)
             else:
+                self._record_new_metric(metric, tags)
                 metric_data = MetricData()
-                metric_data.add(tags, datapoint)
                 self.cache[metric] = [metric_data]
-        finally:
             self.lock.release()
+            metric_data.add(tags, datapoint)
+        except Exception as e:
+            self.lock.release()
+
+    def _record_new_metric(self, metric, tags):
+        self.metrics_fh.write('%s\t%s\n' % (metric, tags))
 
     def pop(self, metric, metric_data_idx):
-        try:
-            self.lock.acquire()
-            metric_data = self.cache[metric][metric_data_idx]
-            tags, datapoints = metric_data.read(clear=True)
-            log.debug("canWrite: %s" % metric_data.canWrite())
-            return tags, datapoints
-        finally:
-            self.lock.release()
+        metric_data = self.cache[metric][metric_data_idx]
+        tags, datapoints = metric_data.read(clear=True)
+        log.debug("canWrite: %s" % metric_data.canWrite())
+        return tags, datapoints
 
     def counts(self):
-        try:
-            self.lock.acquire()
-            return [(metric, i) for metric in self.cache
-                                for i, metric_data in enumerate(self.cache[metric])
-                                if metric_data.canWrite()]
-        finally:
-            self.lock.release()
+        return [(metric, i) for metric in self.cache
+                            for i, metric_data in enumerate(self.cache[metric])
+                            if metric_data.canWrite()]
 
 
 # Ghetto singleton
