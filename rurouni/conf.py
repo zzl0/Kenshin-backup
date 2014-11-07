@@ -38,6 +38,9 @@ class Settings(object):
     LINE_RECEIVER_PORT = '2003'
     LINE_RECEIVER_INTERFACE = '0.0.0.0'
 
+    PICKLE_RECEIVER_PORT = '2004'
+    PICKLE_RECEIVER_INTERFACE = '0.0.0.0'
+
     MAX_CACHE_SIZE = 12
 
     CONF_DIR = '/Users/zzl/projects/bigdata/Kenshin/conf/'
