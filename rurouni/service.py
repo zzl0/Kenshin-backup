@@ -36,13 +36,13 @@ def createBaseService(options):
 
 def createCacheService(options):
     from rurouni.cache import MetricCache
-    from rurouni.protocols import CacheReceiver
+    from rurouni.protocols import CacheManagementHandler
 
     state.events.metricReceived.addHandler(MetricCache.store)
     root_service = createBaseService(options)
 
     factory = ServerFactory()
-    factory.protocol = CacheReceiver
+    factory.protocol = CacheManagementHandler
     service = TCPServer(int(settings.CACHE_QUERY_PORT), factory,
                         interface=settings.CACHE_QUERY_INTERFACE)
     service.setServiceParent(root_service)

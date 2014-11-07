@@ -1,10 +1,13 @@
 # coding: utf-8
+import cPickle as pickle
+
 from twisted.internet.protocol import Protocol, ServerFactory
 from twisted.protocols.basic import LineOnlyReceiver, Int32StringReceiver
 from twisted.internet.error import ConnectionDone
 
 from rurouni.state import events
 from rurouni import log
+from rurouni.cache import MetricCache
 
 
 ### metric receiver
@@ -40,18 +43,24 @@ class MetricLineReceiver(MetricReceiver, LineOnlyReceiver):
         self.metricReceived(metric, tags, datapoint)
 
 
-class CacheReceiver(Int32StringReceiver):
+class CacheManagementHandler(Int32StringReceiver):
+    MAX_LENGTH = 3<<20  # 3M
 
     def connectionMade(self):
         peer = self.transport.getPeer()
         self.peerAddr = "%s:%s" % (peer.host, peer.port)
-        log.msg("%s connected" % self.peerAddr)
+        log.query("%s connected" % self.peerAddr)
 
     def connectionLost(self, reason):
         if reason.check(ConnectionDone):
-            log.msg("%s disconnected" % self.peerAddr)
+            log.query("%s disconnected" % self.peerAddr)
         else:
-            log.msg("%s connection lost: %s" % (self.peerAddr, reason.value))
+            log.query("%s connection lost: %s" % (self.peerAddr, reason.value))
 
     def stringReceived(self, rawRequest):
-        log.msg(" %s" % rawRequest)
+        request = pickle.loads(rawRequest)
+        log.query("%s" %  request)
+        datapoints = MetricCache.fetch(request['metric'], request['tags'])
+        rs = dict(datapoints=datapoints)
+        response = pickle.dumps(rs, protocol=-1)
+        self.sendString(response)

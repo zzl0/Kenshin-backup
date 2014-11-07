@@ -494,9 +494,9 @@ class Storage(object):
                 now = int(time.time())
             if until_time is None:
                 until_time = now
-            if from_time > until_time:
+            if from_time >= until_time:
                 raise InvalidTime("from_time '%s' is after unitl_time '%s'" %
-                                  (from_time, unitl_time))
+                                  (from_time, until_time))
 
             oldest_time = now - header['max_retention']
             if from_time > now:

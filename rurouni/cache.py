@@ -1,5 +1,6 @@
 # coding: utf-8
 import os
+import time
 from threading import Lock
 from collections import OrderedDict
 
@@ -8,8 +9,9 @@ from rurouni import state, log
 
 
 DEFAULT_TAGS_NUM = 40
-DEFAULT_RESOLUTION = 1    # 1 points per second
-DEFAULT_RETENTION = 10   # 600 seconds
+DEFAULT_RESOLUTION = 1  # 1 points per second
+DEFAULT_RETENTION = 600  # 600 seconds
+DEFAULT_WAIT_TIME = 30
 
 
 class MetricData(object):
@@ -94,7 +96,7 @@ class MetricData(object):
                 offset = (ts - self.start_ts) / self.resolution
             idx = base_idx + (self.start_idx + offset) % self.points_num_max
 
-            if ts - self.start_ts - self.retention >= 0:  # 等待 30 秒
+            if ts - self.start_ts - self.retention >= DEFAULT_WAIT_TIME:
                 self.can_write = True
 
             log.debug("add idx: %s, start_ts: %s, start_idx: %s" % (
@@ -113,7 +115,12 @@ class MetricData(object):
     def read(self, begin_ts=None, end_ts=None, clear=False):
         try:
             self.lock.acquire()
-            begin_ts = begin_ts or self.start_ts
+            tags_list = self.get_tags_list()
+
+            if not begin_ts:
+                if not self.start_ts:
+                    return tags_list, []
+                begin_ts = self.start_ts
             begin_idx = self.get_idx(begin_ts)
             if end_ts:
                 end_idx = self.get_idx(end_ts)
@@ -129,12 +136,17 @@ class MetricData(object):
                 for i, (_, base_idx) in enumerate(self.tags_dict.items()):
                     val = self.points[base_idx+begin_idx: base_idx+end_idx]
                     rs[i] = val
+                    if clear:
+                        self.clearPoint(base_idx+begin_idx, base_idx+end_idx)
             else:  # wrap around
                 length = self.points_num_max - begin_idx + end_idx
                 for i, (_, base_idx) in enumerate(self.tags_dict.items()):
                     val = self.points[base_idx+begin_idx: base_idx+self.points_num_max]
                     val += self.points[base_idx: base_idx+end_idx]
                     rs[i] = val
+                    if clear:
+                        self.clearPoint(base_idx+begin_idx, base_idx+self.points_num_max)
+                        self.clearPoint(base_idx, base_idx+end_idx)
 
             # empty tags
             for j in range(i+1, self.tags_num):
@@ -149,10 +161,13 @@ class MetricData(object):
                 self.start_ts = self.start_ts + self.resolution * length
                 self.clearWriteFlag()
 
-            tags_list = self.get_tags_list()
             return tags_list, zip(timestamps, zip(*rs))
         finally:
             self.lock.release()
+
+    def clearPoint(self, begin_idx, end_idx):
+        for i in range(begin_idx, end_idx):
+            self.points[i] = 0
 
 
 class MetricCache(dict):
@@ -217,6 +232,15 @@ class MetricCache(dict):
 
     def _record_new_metric(self, metric, tags):
         self.metrics_fh.write('%s\t%s\n' % (metric, tags))
+
+    def fetch(self, metric, tags):
+        now = int(time.time())
+        for metric_data in self.cache[metric]:
+            if tags in metric_data.tags_dict:
+                tags_list, datapoints = metric_data.read(end_ts=now)
+                tags_idx = tags_list.index(tags)
+                log.debug("tagslist: %s, idx: %s" % (tags_list, tags_idx))
+                return [(x[0], x[1][tags_idx]) for x in datapoints]
 
     def pop(self, metric, metric_data_idx):
         metric_data = self.cache[metric][metric_data_idx]
