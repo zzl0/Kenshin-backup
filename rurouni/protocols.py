@@ -43,6 +43,27 @@ class MetricLineReceiver(MetricReceiver, LineOnlyReceiver):
         self.metricReceived(metric, tags, datapoint)
 
 
+class MetricPickleReceiver(MetricReceiver, Int32StringReceiver):
+    MAX_LENGTH = 2<<20  # 2M
+
+    def connectionMade(self):
+        MetricReceiver.connectionMade(self)
+
+    def stringReceived(self, data):
+        try:
+            datapoints = pickle.loads(data)
+            log.debug(datapoints)
+        except:
+            log.listener("invalid pickle received from %s, ignoring"
+                         % self.peerName)
+        for metric, tags, value, timestamp in datapoints:
+            try:
+                datapoint = int(timestamp), float(value)
+            except:
+                continue
+            self.metricReceived(metric, tags, datapoint)
+
+
 class CacheManagementHandler(Int32StringReceiver):
     MAX_LENGTH = 3<<20  # 3M
 
