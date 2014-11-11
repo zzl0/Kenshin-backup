@@ -40,6 +40,10 @@ def createBaseService(options):
             service = TCPServer(int(port), factory, interface=interface)
             service.setServiceParent(root_service)
 
+    from rurouni.state.instrumentation import InstrumentationService
+    service = InstrumentationService()
+    service.setServiceParent(root_service)
+
     return root_service
 
 

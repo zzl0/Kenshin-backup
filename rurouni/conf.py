@@ -45,9 +45,14 @@ class Settings(object):
 
     CONF_DIR = '/Users/zzl/projects/bigdata/Kenshin/conf/'
     LOCAL_DATA_DIR = '/Users/zzl/projects/bigdata/Kenshin/data/'
-
     METRICS_FILE = '/Users/zzl/projects/bigdata/Kenshin/data/metrics'
+
+    LOG_UPDATES = True
+
+    RUROUNI_METRIC_INTERVAL = 10
+    RUROUNI_METRIC = 'rurouni'
+
+    instance = 'a'
 
 
 settings = Settings()
-

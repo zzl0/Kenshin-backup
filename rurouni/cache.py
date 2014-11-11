@@ -6,12 +6,10 @@ from collections import OrderedDict
 
 from rurouni.conf import settings
 from rurouni import state, log
+from rurouni.storage import getSchema
 
 
-DEFAULT_TAGS_NUM = 40
-DEFAULT_RESOLUTION = 1  # 1 points per second
-DEFAULT_RETENTION = 600  # 600 seconds
-DEFAULT_WAIT_TIME = 30
+DEFAULT_WAIT_TIME = 1
 
 
 class MetricData(object):
@@ -40,10 +38,10 @@ class MetricData(object):
     Actually we use one-dimention list to implement above structure.
     """
 
-    def __init__(self, tags_num=None, resolution=None, retention=None):
-        self.tags_num = tags_num or DEFAULT_TAGS_NUM
-        self.resolution = resolution or DEFAULT_RESOLUTION
-        self.retention = retention or DEFAULT_RETENTION
+    def __init__(self, schema):
+        self.tags_num = schema.tags_num
+        self.resolution = schema.archives[0][0]
+        self.retention = schema.cache_retention
         self.lock = Lock()
 
         self.points_num = self.retention / self.resolution
@@ -102,6 +100,8 @@ class MetricData(object):
             log.debug("add idx: %s, start_ts: %s, start_idx: %s" % (
                        idx, self.start_ts, self.start_idx))
             self.points[idx] = val
+        except Exception as e:
+            log.err('add error in MetricData: %s' % e)
         finally:
             self.lock.release()
 
@@ -199,9 +199,11 @@ class MetricCache(dict):
                 rs[metric].append(tags)
             for metric, tags_list in rs.items():
                 self.cache[metric] = []
-                for i in range(0, len(tags_list), DEFAULT_TAGS_NUM):
-                    metric_data = MetricData()
-                    metric_data.init_tags(tags_list[i:DEFAULT_TAGS_NUM])
+                schema = getSchema(metric)
+                tags_num = schema.tags_num
+                for i in range(0, len(tags_list), tags_num):
+                    metric_data = MetricData(schema)
+                    metric_data.init_tags(tags_list[i:tags_num])
                     self.cache[metric].append(metric_data)
 
     def store(self, metric, tags, datapoint=None):
@@ -219,11 +221,13 @@ class MetricCache(dict):
                 if not flag:
                     self._record_new_metric(metric, tags)
                     if metric_data.full():
-                        metric_data = MetricData()
+                        schema = getSchema(metric)
+                        metric_data = MetricData(schema)
                         metric_data_list.append(metric_data)
             else:
                 self._record_new_metric(metric, tags)
-                metric_data = MetricData()
+                schema = getSchema(metric)
+                metric_data = MetricData(schema)
                 self.cache[metric] = [metric_data]
             self.lock.release()
             metric_data.add(tags, datapoint)
