@@ -8,10 +8,9 @@ from twisted.internet import reactor
 import kenshin
 from rurouni.cache import MetricCache
 from rurouni import log
-from rurouni.storage import getFilePath, loadStorageSchemas
-
-
-schemas = loadStorageSchemas()
+from rurouni.conf import settings
+from rurouni.state import instrumentation
+from rurouni.storage import getFilePath, getSchema
 
 
 class WriterService(Service):
@@ -47,17 +46,36 @@ def writeCachedDataPoints():
 
     for metric, idx in metrics:
         tags, datapoints = MetricCache.pop(metric, idx)
-        log.msg('write metric: %s, datapoints: %s' % (metric, datapoints))
         file_path = getFilePath(metric, idx)
 
         if not os.path.exists(file_path):
-            for schema in schemas:
-                if schema.match(metric):
-                    log.creates('new metric file %s-%d matched schema %s' %
-                                (metric, idx, schema.name))
-                    break
-            kenshin.create(file_path, tags, schema.archives, schema.xFilesFactor,
-                           schema.aggregationMethod)
-        kenshin.update(file_path, datapoints)
+            schema = getSchema(metric)
+            log.creates('new metric file %s-%d matched schema %s' %
+                        (metric, idx, schema.name))
+            try:
+                kenshin.create(file_path, tags, schema.archives,
+                               schema.xFilesFactor,
+                               schema.aggregationMethod)
+                instrumentation.incr('creates')
+            except Exception as e:
+                log.err('Error creating %s: %s' % (file_path, e))
+
+        try:
+            t1 = time.time()
+            log.msg('filepath: %s, datapoints: %s' % (file_path, datapoints))
+            kenshin.update(file_path, datapoints)
+            t2 = time.time()
+            update_time = t2 - t1
+        except Exception as e:
+            log.err('Error writing to %s: %s' % (file_path, e))
+            instrumentation.incr('errors')
+        else:
+            point_cnt = len(datapoints)
+            instrumentation.incr('committedPoints', point_cnt)
+            instrumentation.append('updateTimes', update_time)
+
+            if settings.LOG_UPDATES:
+                log.updates("wrote %d datapoints for %s in %.5f secs" %
+                            (point_cnt, metric, update_time))
 
     return True

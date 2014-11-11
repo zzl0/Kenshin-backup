@@ -30,8 +30,8 @@ class Event(object):
 
 
 metricReceived = Event('metricReceived',
-                       lambda *a: instrumentation.incr('metricReceived'))
+                       lambda *a, **ka: instrumentation.incr('metricReceived'))
 
 cacheFull = Event('cacheFull')
-cacheFull.addHandler(lambda: instrumentation.incr('cache.overflow'))
-cacheFull.addHandler(lambda: setattr(state, 'cacheTooFull', True))
+cacheFull.addHandler(lambda *a, **ka: instrumentation.incr('cacheOverflow'))
+cacheFull.addHandler(lambda *a, **ka: setattr(state, 'cacheTooFull', True))
