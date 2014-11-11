@@ -554,10 +554,10 @@ class Storage(object):
         step = tag_cnt + 1
         for i in xrange(0, len(unpacked_series), step):
             point_ts = unpacked_series[i]
-            if from_time < point_ts < until_time:
+            if from_time <= point_ts <= until_time:
                 val = unpacked_series[i+1: i+step]
             else:
-                val = None
+                val = (0.,) * (step - 1)
             val_list[i/step] = val
 
         time_info = (from_time, until_time, archive['sec_per_point'])
