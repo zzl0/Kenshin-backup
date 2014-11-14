@@ -88,5 +88,5 @@ class TestStorage(unittest.TestCase):
         from_ts = now_ts - num_points - 1
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
         time_info = (from_ts, roundup(now_ts, 3), 3)
-        expected = time_info, [(5.0, 15.0), (2.0, 12.0), (0.0, 0.0)]
+        expected = time_info, [(5.0, 15.0), (2.0, 12.0), None]
         self.assertEqual(series, expected)
