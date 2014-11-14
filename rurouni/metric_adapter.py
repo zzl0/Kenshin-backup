@@ -1,25 +1,19 @@
 # coding: utf-8
 import os
 import re
+import imp
 
-from rurouni import log
 from rurouni.conf import settings
 
-
-def load_conf(path):
-    if not os.path.exists(path):
-        log.err("conf %s do not exists", path)
-        raise Exception("conf %s do not exists" % path)
-    try:
-        data = open(path).read()
-        exec data in globals(), globals()
-    except Exception, e:
-        log.err("error while load conf from %s: %s" % (path, e))
-        raise
-
-
 config_file = os.path.join(settings.CONF_DIR, 'metric_adapter.conf')
-load_conf(config_file)
+adapter_conf = imp.load_source('adapter_conf', config_file)
+
+
+METRIC_RE_EXPS = dict(
+    NAME='[^.]*',
+)
+METRIC_ADAPTER_CONFIG = [(in_pat.format(**METRIC_RE_EXPS), out_pat)
+                         for (in_pat, out_pat) in adapter_conf.METRIC_ADAPTER_CONFIG]
 
 
 def change_metric(metric, config=METRIC_ADAPTER_CONFIG):
@@ -35,7 +29,7 @@ def change_metric(metric, config=METRIC_ADAPTER_CONFIG):
     """
     for (in_pat, out_pat) in config:
         match = re.match(in_pat, metric)
-        return out_pat.format(**match.groupdict())
+        return out_pat.format(**match.groupdict()).split(' ')
 
 
 if __name__ == '__main__':

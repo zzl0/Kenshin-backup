@@ -80,7 +80,7 @@ class WhisperPickleReceiver(MetricReceiver, Int32StringReceiver):
         for metric, value, timestamp in datapoints:
             try:
                 datapoint = int(timestamp), float(value)
-                metric_name, tags = change_metric(metric).split(' ')
+                metric_name, tags = change_metric(metric)
             except:
                 raise
             self.metricReceived(metric_name, tags, datapoint)
