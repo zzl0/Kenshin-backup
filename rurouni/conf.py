@@ -41,6 +41,9 @@ class Settings(object):
     PICKLE_RECEIVER_PORT = '2004'
     PICKLE_RECEIVER_INTERFACE = '0.0.0.0'
 
+    WHISPER_PICKLE_RECEIVER_PORT = '2005'
+    WHISPER_PICKLE_RECEIVER_INTERFACE = '0.0.0.0'
+
     MAX_CACHE_SIZE = 12
 
     CONF_DIR = '/Users/zzl/projects/bigdata/Kenshin/conf/'
