@@ -8,6 +8,7 @@ from twisted.internet.error import ConnectionDone
 from rurouni.state import events
 from rurouni import log
 from rurouni.cache import MetricCache
+from rurouni.metric_adapter import change_metric
 
 
 ### metric receiver
@@ -62,6 +63,27 @@ class MetricPickleReceiver(MetricReceiver, Int32StringReceiver):
             except:
                 continue
             self.metricReceived(metric, tags, datapoint)
+
+
+class WhisperPickleReceiver(MetricReceiver, Int32StringReceiver):
+    MAX_LENGTH = 2<<20
+
+    def connectionMade(self):
+        MetricReceiver.connectionMade(self)
+
+    def stringReceived(self, data):
+        try:
+            datapoints = pickle.loads(data)
+        except:
+            log.listener("invalid whisper pickle received from %s, ignoring"
+                         % self.peerName)
+        for metric, value, timestamp in datapoints:
+            try:
+                datapoint = int(timestamp), float(value)
+                metric_name, tags = change_metric(metric).split(' ')
+            except:
+                raise
+            self.metricReceived(metric_name, tags, datapoint)
 
 
 class CacheManagementHandler(Int32StringReceiver):

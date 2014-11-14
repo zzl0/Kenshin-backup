@@ -28,10 +28,16 @@ def createBaseService(options):
     receive_services = (
         (settings.LINE_RECEIVER_INTERFACE,
          settings.LINE_RECEIVER_PORT,
-         protocols.MetricLineReceiver),
+         protocols.MetricLineReceiver
+        ),
         (settings.PICKLE_RECEIVER_INTERFACE,
          settings.PICKLE_RECEIVER_PORT,
-         protocols.MetricPickleReceiver),
+         protocols.MetricPickleReceiver
+        ),
+        (settings.WHISPER_PICKLE_RECEIVER_INTERFACE,
+         settings.WHISPER_PICKLE_RECEIVER_PORT,
+         protocols.WhisperPickleReceiver
+        )
     )
     for interface, port, protocol in receive_services:
         if port:
