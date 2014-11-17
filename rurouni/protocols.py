@@ -82,7 +82,8 @@ class WhisperPickleReceiver(MetricReceiver, Int32StringReceiver):
                 datapoint = int(timestamp), float(value)
                 metric_name, tags = change_metric(metric)
             except:
-                raise
+                log.debug("error in metric adapter for: %s" % metric)
+                continue
             self.metricReceived(metric_name, tags, datapoint)
 
 
