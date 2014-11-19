@@ -207,7 +207,7 @@ class MetricCache(dict):
                     self.cache[metric].append(metric_data)
 
     def store(self, metric, tags, datapoint=None):
-        log.msg("MetricCache received (%s, %s, %s)" % (metric, tags, datapoint))
+        log.debug("MetricCache received (%s, %s, %s)" % (metric, tags, datapoint))
         try:
             self.lock.acquire()
             if metric in self.cache:
@@ -253,9 +253,13 @@ class MetricCache(dict):
         return tags, datapoints
 
     def counts(self):
-        return [(metric, i) for metric in self.cache
+        try:
+            self.lock.acquire()
+            return [(metric, i) for metric in self.cache
                             for i, metric_data in enumerate(self.cache[metric])
                             if metric_data.canWrite()]
+        finally:
+            self.lock.release()
 
 
 # Ghetto singleton

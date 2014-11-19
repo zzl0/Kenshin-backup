@@ -77,7 +77,7 @@ class WhisperPickleReceiver(MetricReceiver, Int32StringReceiver):
         except:
             log.listener("invalid whisper pickle received from %s, ignoring"
                          % self.peerName)
-        for metric, value, timestamp in datapoints:
+        for metric, (timestamp, value) in datapoints:
             try:
                 datapoint = int(timestamp), float(value)
                 metric_name, tags = change_metric(metric)

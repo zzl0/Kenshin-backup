@@ -34,9 +34,9 @@ def run(sock, delay):
         tuples = []
         idx2min = [1, 5, 15]
         for i, val in enumerate(loadavg):
-            line = "stats.counters.web.min-%s.bandwidth.rate %s %d" % (idx2min[i], val, now)
+            line = "stats.counters.web.min-%s.bandwidth.rate %d %s" % (idx2min[i], now, val)
             lines.append(line)
-            tuples.append(('stats.counters.web.min-%s.bandwidth.rate' % idx2min[i], val, now))
+            tuples.append(('stats.counters.web.min-%s.bandwidth.rate' % idx2min[i], (now, val)))
         msg = '\n'.join(lines) + '\n'  # all lines must end in a newline
         print 'sending message'
         print '-' * 80
