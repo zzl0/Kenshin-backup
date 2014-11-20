@@ -62,7 +62,7 @@ def writeCachedDataPoints():
 
         try:
             t1 = time.time()
-            log.msg('filepath: %s, datapoints: %s' % (file_path, datapoints))
+            log.debug('filepath: %s, datapoints: %s' % (file_path, datapoints))
             kenshin.update(file_path, datapoints)
             t2 = time.time()
             update_time = t2 - t1
