@@ -11,9 +11,6 @@ from rurouni import log
 from rurouni.conf import settings, OrderedConfigParser
 
 
-STORAGE_SCHEMAS_CONFIG = join(settings.CONF_DIR, 'storage-schemas.conf')
-
-
 def getFilePath(metric, tags_idx):
     path = metric.replace('.', sep)
     return join(settings.LOCAL_DATA_DIR, path, '%d.hs' % tags_idx)
@@ -70,10 +67,10 @@ class PatternSchema(Schema):
         return self.pattern.match(metric)
 
 
-def loadStorageSchemas():
+def loadStorageSchemas(conf_file):
     schema_list = []
     config = OrderedConfigParser()
-    config.read(STORAGE_SCHEMAS_CONFIG)
+    config.read(conf_file)
 
     for section in config.sections():
         options = dict(config.items(section))
@@ -109,10 +106,14 @@ defaultSchema = DefaultSchema(
     600,
     40,
 )
-schemas = loadStorageSchemas()
 
+_schemas = None
 def getSchema(metric):
-    for schema in schemas:
+    global _schemas
+    if _schemas is None:
+        conf_file = join(settings.CONF_DIR, 'storage-schemas.conf')
+        _schemas = loadStorageSchemas(conf_file)
+    for schema in _schemas:
         if schema.match(metric):
             return schema
     return defaultSchema

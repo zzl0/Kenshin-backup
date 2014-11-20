@@ -9,9 +9,6 @@ from rurouni import state, log
 from rurouni.storage import getSchema
 
 
-DEFAULT_WAIT_TIME = 1
-
-
 class MetricData(object):
     """
     The data structure of metric data.
@@ -94,7 +91,7 @@ class MetricData(object):
                 offset = (ts - self.start_ts) / self.resolution
             idx = base_idx + (self.start_idx + offset) % self.points_num_max
 
-            if ts - self.start_ts - self.retention >= DEFAULT_WAIT_TIME:
+            if ts - self.start_ts - self.retention >= settings.DEFAULT_WAIT_TIME:
                 self.can_write = True
 
             log.debug("add idx: %s, start_ts: %s, start_idx: %s" % (
@@ -181,30 +178,35 @@ class MetricCache(dict):
     }
     """
     def __init__(self):
-        self.size = 0
         self.cache = {}
-        self.initCache()
         self.lock = Lock()
-        self.metrics_fh = open(settings.METRICS_FILE, 'a')
+        self.metrics_fh = None
 
     def initCache(self):
-        metrics_file = settings.METRICS_FILE
-        if not os.path.exists(metrics_file):
-            return
-        with open(metrics_file) as f:
-            rs = {}
-            for line in f:
-                metric, tags = line.rstrip('\n').split('\t')
-                rs.setdefault(metric, [])
-                rs[metric].append(tags)
-            for metric, tags_list in rs.items():
-                self.cache[metric] = []
-                schema = getSchema(metric)
-                tags_num = schema.tags_num
-                for i in range(0, len(tags_list), tags_num):
-                    metric_data = MetricData(schema)
-                    metric_data.init_tags(tags_list[i:tags_num])
-                    self.cache[metric].append(metric_data)
+        try:
+            self.lock.acquire()
+            if self.metrics_fh is not None:
+                return
+
+            metrics_file = settings.METRICS_FILE
+            if os.path.exists(metrics_file):
+                with open(metrics_file) as f:
+                    rs = {}
+                    for line in f:
+                        metric, tags = line.rstrip('\n').split('\t')
+                        rs.setdefault(metric, [])
+                        rs[metric].append(tags)
+                    for metric, tags_list in rs.items():
+                        self.cache[metric] = []
+                        schema = getSchema(metric)
+                        tags_num = schema.tags_num
+                        for i in range(0, len(tags_list), tags_num):
+                            metric_data = MetricData(schema)
+                            metric_data.init_tags(tags_list[i:tags_num])
+                            self.cache[metric].append(metric_data)
+            self.metrics_fh = open(metrics_file, 'a')
+        finally:
+            self.lock.release()
 
     def store(self, metric, tags, datapoint=None):
         log.debug("MetricCache received (%s, %s, %s)" % (metric, tags, datapoint))

@@ -8,7 +8,7 @@ from twisted.internet.error import ConnectionDone
 from rurouni.state import events
 from rurouni import log
 from rurouni.cache import MetricCache
-from rurouni.metric_adapter import change_metric
+from rurouni.metric_adapter import changeMetric
 
 
 ### metric receiver
@@ -80,9 +80,9 @@ class WhisperPickleReceiver(MetricReceiver, Int32StringReceiver):
         for metric, (timestamp, value) in datapoints:
             try:
                 datapoint = int(timestamp), float(value)
-                metric_name, tags = change_metric(metric)
-            except:
-                log.debug("error in metric adapter for: %s" % metric)
+                metric_name, tags = changeMetric(metric)
+            except Exception as e:
+                log.debug("error in metric adapter for: %s, error: %s" % (metric, e))
                 continue
             self.metricReceived(metric_name, tags, datapoint)
 
