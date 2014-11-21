@@ -102,7 +102,7 @@ def debug(message, **context):
     if debugEnabled:
         msg(message, **context)
 
-debugEnabled = True
+debugEnabled = False
 def setDebugEnabled(enabled):
     global debugEnabled
     debugEnabled = enabled

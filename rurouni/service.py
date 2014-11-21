@@ -34,8 +34,8 @@ def createBaseService(options):
          settings.PICKLE_RECEIVER_PORT,
          protocols.MetricPickleReceiver
         ),
-        (settings.WHISPER_PICKLE_RECEIVER_INTERFACE,
-         settings.WHISPER_PICKLE_RECEIVER_PORT,
+        (settings.GRAPHITE_PICKLE_RECEIVER_INTERFACE,
+         settings.GRAPHITE_PICKLE_RECEIVER_PORT,
          protocols.WhisperPickleReceiver
         )
     )
@@ -57,6 +57,7 @@ def createCacheService(options):
     from rurouni.cache import MetricCache
     from rurouni.protocols import CacheManagementHandler
 
+    MetricCache.initCache()
     state.events.metricReceived.addHandler(MetricCache.store)
     root_service = createBaseService(options)
 

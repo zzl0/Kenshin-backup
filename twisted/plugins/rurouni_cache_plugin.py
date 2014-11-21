@@ -13,7 +13,7 @@ class RurouniServiceMaker(object):
 
     tapname = 'metric'
     description = 'a basic metric service.'
-    options = conf.Options
+    options = conf.RurouniOptions
 
     def makeService(self, options):
         return service.createCacheService(options)
