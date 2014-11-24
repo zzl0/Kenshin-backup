@@ -25,3 +25,11 @@ I recommended using virtualenv when installing dependencies:
 Tests can be run using nosetests:
 
     $ nosetests -v
+
+TODO
+--------------
+
+- web interface
+- interface redesign
+- name collision
+- migration tool
