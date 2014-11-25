@@ -46,3 +46,5 @@ start=1356998400&m=avg:sys.cpu.user{host=*}
 # graphite
 target=sum(stats.counters.fusible.*.*.*.fail.rate),10)&from=-1h
 ```
+
+最终为了指标监控的使用方便，我们兼容了 graphite 的接口。

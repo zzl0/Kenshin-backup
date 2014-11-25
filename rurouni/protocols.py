@@ -26,8 +26,8 @@ class MetricReceiver:
         else:
             return 'peer'
 
-    def metricReceived(self, metric, tags, datapoint):
-        events.metricReceived(metric, tags, datapoint)
+    def metricReceived(self, metric, datapoint):
+        events.metricReceived(metric, datapoint)
 
 
 class MetricLineReceiver(MetricReceiver, LineOnlyReceiver):
@@ -80,11 +80,10 @@ class WhisperPickleReceiver(MetricReceiver, Int32StringReceiver):
         for metric, (timestamp, value) in datapoints:
             try:
                 datapoint = int(timestamp), float(value)
-                metric_name, tags = changeMetric(metric)
             except Exception as e:
                 log.debug("error in metric adapter for: %s, error: %s" % (metric, e))
                 continue
-            self.metricReceived(metric_name, tags, datapoint)
+            self.metricReceived(metric, datapoint)
 
 
 class CacheManagementHandler(Int32StringReceiver):
