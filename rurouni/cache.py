@@ -19,6 +19,9 @@ class MetricCache(object):
         self.schema_caches = {}
         self.metrics_fh = None
 
+    def __del__(self):
+        self.metrics_fh.close()
+
     def initCache(self):
         try:
             self.lock.acquire()
@@ -34,6 +37,7 @@ class MetricCache(object):
                         metric_idx = (schema.name, file_idx, pos_idx)
                         self.metric_idxs[metric] = metric_idx
             log.debug("%s" % self.metric_idxs)
+            self.metrics_fh = open(metrics_file, 'a')
         finally:
             self.lock.release()
 
@@ -56,6 +60,7 @@ class MetricCache(object):
 
                 # create link
                 file_path = getFilePath(schema.name, file_idx)
+                self.metrics_fh.write(metric + '\n')
                 createLink(metric, file_path)
 
                 metric_idx = (schema.name, file_idx, pos_idx)
@@ -222,7 +227,7 @@ class FileCache(object):
             log.debug("begin_offset: %s, end_offset: %s" %
                       (begin_offset, end_offset))
 
-            rs = [None] * self.curr_size
+            rs = [None] * self.metrics_num
             if begin_offset < end_offset:
                 length = end_offset - begin_offset
                 for i, base_idx in enumerate(self.base_idxs[:self.curr_size]):
@@ -239,11 +244,15 @@ class FileCache(object):
                     begin_idx = base_idx + begin_offset
                     end_idx = base_idx + end_offset
                     val = self.points[begin_idx: base_idx+self.cache_size]
-                    val += self.points[base_idxs: begin_idx]
+                    val += self.points[base_idx: begin_idx]
                     rs[i] = val
                     if clear:
-                        self.clearPoint(begin_idx, base_idxs+self.cache_size)
+                        self.clearPoint(begin_idx, base_idx+self.cache_size)
                         self.clearPoint(base_idx, end_idx)
+
+            # empty metrics
+            for j in range(i+1, self.metrics_num):
+                rs[j] = [0] * length
 
             # timestamps
             timestamps = [self.start_ts + i * self.resolution
