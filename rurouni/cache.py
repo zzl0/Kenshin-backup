@@ -25,6 +25,11 @@ class MetricCache(object):
     def initCache(self):
         try:
             self.lock.acquire()
+
+            # avoid repeated call
+            if self.metrics_fh is not None:
+                return
+
             metrics_file = settings.METRICS_FILE
             if os.path.exists(metrics_file):
                 with open(metrics_file) as f:
