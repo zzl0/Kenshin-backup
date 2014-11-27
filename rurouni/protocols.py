@@ -35,13 +35,13 @@ class MetricLineReceiver(MetricReceiver, LineOnlyReceiver):
 
     def lineReceived(self, line):
         try:
-            metric, tags, value, timestamp = line.strip().split()
+            metric, value, timestamp = line.strip().split()
             datapoint = (int(timestamp), float(value))
         except:
             log.msg('invalid line (%s) received from client %s' %
                     (line, self.peerName))
             return
-        self.metricReceived(metric, tags, datapoint)
+        self.metricReceived(metric, datapoint)
 
 
 class MetricPickleReceiver(MetricReceiver, Int32StringReceiver):
@@ -57,31 +57,11 @@ class MetricPickleReceiver(MetricReceiver, Int32StringReceiver):
         except:
             log.listener("invalid pickle received from %s, ignoring"
                          % self.peerName)
-        for metric, tags, value, timestamp in datapoints:
-            try:
-                datapoint = int(timestamp), float(value)
-            except:
-                continue
-            self.metricReceived(metric, tags, datapoint)
-
-
-class WhisperPickleReceiver(MetricReceiver, Int32StringReceiver):
-    MAX_LENGTH = 2<<20
-
-    def connectionMade(self):
-        MetricReceiver.connectionMade(self)
-
-    def stringReceived(self, data):
-        try:
-            datapoints = pickle.loads(data)
-        except:
-            log.listener("invalid whisper pickle received from %s, ignoring"
-                         % self.peerName)
         for metric, (timestamp, value) in datapoints:
             try:
                 datapoint = int(timestamp), float(value)
             except Exception as e:
-                log.debug("error in metric adapter for: %s, error: %s" % (metric, e))
+                log.debug("error in pickle receiver for: %s, error: %s" % (metric, e))
                 continue
             self.metricReceived(metric, datapoint)
 

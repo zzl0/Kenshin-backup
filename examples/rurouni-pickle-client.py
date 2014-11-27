@@ -34,9 +34,9 @@ def run(sock, delay):
         tuples = []
         idx2min = [1, 5, 15]
         for i, val in enumerate(loadavg):
-            line = "test.system.loadavg min=%s %s %d" % (idx2min[i], val, now)
+            line = "test.system.loadavg.min_%s %s %d" % (idx2min[i], val, now)
             lines.append(line)
-            tuples.append(('test.system.loadavg', 'min=%s' % idx2min[i], val, now))
+            tuples.append(('test.system.loadavg.min_%s' % idx2min[i], (now, val)))
         msg = '\n'.join(lines) + '\n'  # all lines must end in a newline
         print 'sending message'
         print '-' * 80

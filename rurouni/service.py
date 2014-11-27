@@ -34,10 +34,6 @@ def createBaseService(options):
          settings.PICKLE_RECEIVER_PORT,
          protocols.MetricPickleReceiver
         ),
-        (settings.GRAPHITE_PICKLE_RECEIVER_INTERFACE,
-         settings.GRAPHITE_PICKLE_RECEIVER_PORT,
-         protocols.WhisperPickleReceiver
-        )
     )
     for interface, port, protocol in receive_services:
         if port:
