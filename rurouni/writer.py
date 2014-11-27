@@ -40,25 +40,14 @@ def writeForever():
 
 
 def writeCachedDataPoints():
-    metrics = MetricCache.counts()
+    metrics = MetricCache.writableFileCaches()
+    log.debug("metrics=============: %s" % metrics)
     if not metrics:
         return False
 
     for metric, idx in metrics:
-        tags, datapoints = MetricCache.pop(metric, idx)
+        datapoints = MetricCache.pop(metric, idx)
         file_path = getFilePath(metric, idx)
-
-        if not os.path.exists(file_path):
-            schema = getSchema(metric)
-            log.creates('new metric file %s-%d matched schema %s' %
-                        (metric, idx, schema.name))
-            try:
-                kenshin.create(file_path, tags, schema.archives,
-                               schema.xFilesFactor,
-                               schema.aggregationMethod)
-                instrumentation.incr('creates')
-            except Exception as e:
-                log.err('Error creating %s: %s' % (file_path, e))
 
         try:
             t1 = time.time()

@@ -104,13 +104,13 @@ def record_metrics():
 
 def cache_record(metric_type, val):
     metric = settings.RUROUNI_METRIC
-    tags_tpl = 'hostname=%s,instance=%s,type=%s'
+    tags_tpl = metric + '.%s.%s.%s'
     if settings.instance is None:
         tags = tags_tpl % (HOSTNAME, 'a', metric_type)
     else:
         tags = tags_tpl % (HOSTNAME, settings.instance, metric_type)
     datapoint = int(time.time()), val
-    cache.MetricCache.store(metric, tags, datapoint)
+    cache.MetricCache.put(metric, datapoint)
 
 
 class InstrumentationService(Service):

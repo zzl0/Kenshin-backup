@@ -58,7 +58,8 @@ def createCacheService(options):
     from rurouni.protocols import CacheManagementHandler
 
     MetricCache.initCache()
-    state.events.metricReceived.addHandler(MetricCache.store)
+    # raise Exception("%s" % MetricCache.metric_idxs)
+    state.events.metricReceived.addHandler(MetricCache.put)
     root_service = createBaseService(options)
 
     factory = ServerFactory()

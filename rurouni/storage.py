@@ -7,13 +7,25 @@ from ConfigParser import ConfigParser
 from collections import OrderedDict
 
 import kenshin
+from kenshin.utils import mkdir_p
 from rurouni import log
 from rurouni.conf import settings, OrderedConfigParser
 
 
-def getFilePath(metric, tags_idx):
+def getFilePath(schema_name, file_idx):
+    return join(settings.LOCAL_DATA_DIR, 'data', schema_name, '%d.hs' % file_idx)
+
+
+def getMetricPath(metric):
     path = metric.replace('.', sep)
-    return join(settings.LOCAL_DATA_DIR, path, '%d.hs' % tags_idx)
+    return join(settings.LOCAL_DATA_DIR, 'link', path + '.hs')
+
+
+def createLink(metric, file_path):
+    metric_path = getMetricPath(metric)
+    dir_name = os.path.dirname(metric_path)
+    mkdir_p(dir_name)
+    os.symlink(file_path, metric_path)
 
 
 class Archive:
@@ -40,13 +52,14 @@ class Schema:
 
 class DefaultSchema(Schema):
     def __init__(self, name, xFilesFactor, aggregationMethod, archives,
-                 cache_retention, tags_num):
+                 cache_retention, metrics_num, cache_ratio):
         self.name = name
         self.xFilesFactor = xFilesFactor
         self.aggregationMethod = aggregationMethod
         self.archives = archives
         self.cache_retention = cache_retention
-        self.tags_num = tags_num
+        self.metrics_num = metrics_num
+        self.cache_ratio = cache_ratio
 
     def match(self, metric):
         return True
@@ -54,14 +67,15 @@ class DefaultSchema(Schema):
 
 class PatternSchema(Schema):
     def __init__(self, name, pattern, xFilesFactor, aggregationMethod, archives,
-                 cache_retention, tags_num):
+                 cache_retention, metrics_num, cache_ratio):
         self.name = name
         self.pattern = re.compile(pattern)
         self.xFilesFactor = xFilesFactor
         self.aggregationMethod = aggregationMethod
         self.archives = archives
         self.cache_retention = cache_retention
-        self.tags_num = tags_num
+        self.metrics_num = metrics_num
+        self.cache_ratio = cache_ratio
 
     def match(self, metric):
         return self.pattern.match(metric)
@@ -82,7 +96,8 @@ def loadStorageSchemas(conf_file):
         archives = [Archive.fromString(s).getTuple() for s in retentions]
         cache_retention = kenshin.RetentionParser.parse_time_str(
             options.get('cacheretention'))
-        tags_num = options.get('tagsnum')
+        metrics_num = options.get('metricsnum')
+        cache_ratio = 1.2
 
         try:
             kenshin.validate_archive_list(archives, xff)
@@ -90,7 +105,8 @@ def loadStorageSchemas(conf_file):
             log.err("Invalid schema found in %s." % section)
 
         schema = PatternSchema(section, pattern, float(xff), agg, archives,
-                               int(cache_retention), int(tags_num))
+                               int(cache_retention), int(metrics_num),
+                               float(cache_ratio))
         schema_list.append(schema)
     schema_list.append(defaultSchema)
     return schema_list
@@ -105,6 +121,7 @@ defaultSchema = DefaultSchema(
     ((60, 60 * 24 * 7)),  # default retention (7 days of minutely data)
     600,
     40,
+    1.2
 )
 
 _schemas = None
