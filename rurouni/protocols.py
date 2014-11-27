@@ -83,7 +83,7 @@ class CacheManagementHandler(Int32StringReceiver):
     def stringReceived(self, rawRequest):
         request = pickle.loads(rawRequest)
         log.query("%s" %  request)
-        datapoints = MetricCache.fetch(request['metric'], request['tags'])
+        datapoints = MetricCache.get(request['metric'])
         rs = dict(datapoints=datapoints)
         response = pickle.dumps(rs, protocol=-1)
         self.sendString(response)

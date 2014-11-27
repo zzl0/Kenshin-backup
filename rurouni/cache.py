@@ -77,7 +77,7 @@ class MetricCache(object):
             return schema_cache
 
     def get(self, metric):
-        if metric not in self.metrics:
+        if metric not in self.metric_idxs:
             return []
         (schema_name, file_idx, pos_idx) = self.getMetricIdx(metric)
         file_cache = self.schema_caches[schema_name][file_idx]

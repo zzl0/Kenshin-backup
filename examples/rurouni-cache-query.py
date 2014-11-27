@@ -9,8 +9,7 @@ RUROUNI_SERVER = '127.0.0.1'
 RUROUNI_QUERY_PORT = 7002
 
 def main():
-    metric_name = sys.argv[1]
-    tags = sys.argv[2]
+    metric = sys.argv[1]
     conn = socket.socket()
     try:
         conn.connect((RUROUNI_SERVER, RUROUNI_QUERY_PORT))
@@ -20,8 +19,7 @@ def main():
 
     request = {
         'type': 'cache-query',
-        'metric': metric_name,
-        'tags': tags,
+        'metric': metric,
     }
 
     serialized_request = pickle.dumps(request, protocol=-1)

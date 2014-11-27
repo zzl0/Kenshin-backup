@@ -21,7 +21,6 @@ import math
 import struct
 import operator
 import inspect
-
 from agg import Agg
 from utils import mkdir_p, roundup
 from consts import DEFAULT_TAG_LENGTH
@@ -351,7 +350,6 @@ class Storage(object):
                             break
                         fh_tmp.write(bytes)
                 os.rename(tmpfile, path)
-
 
     def update(self, path, points, now=None):
         # order points by timestamp, newest first
