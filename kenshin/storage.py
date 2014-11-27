@@ -6,7 +6,7 @@
 # File = Header, Data
 #     Header = Metadata, Tag+, ArchiveInfo+
 #         Metadata = agg_id, max_retention, x_files_factor, archive_count, tag_size, point_size
-#         Tag = type=value[,type2=value2]
+#         Tag = metric
 #         ArchiveInfo = offset, seconds_per_point, point_count
 #     Data = Archive+
 #         Archive = Point+
@@ -24,6 +24,7 @@ import inspect
 
 from agg import Agg
 from utils import mkdir_p, roundup
+from consts import DEFAULT_TAG_LENGTH
 
 
 LONG_FORMAT = "!L"
@@ -33,7 +34,6 @@ FLOAT_SIZE = struct.calcsize(FLOAT_FORMAT)
 VALUE_FORMAT = "!d"
 VALUE_SIZE = struct.calcsize(VALUE_FORMAT)
 POINT_FORMAT = "!L%dd"
-# POINT_SIZE = struct.calcsize(POINT_FORMAT)
 METADATA_FORMAT = "!2Lf3L"
 METADATA_SIZE = struct.calcsize(METADATA_FORMAT)
 ARCHIVEINFO_FORMAT = "!3L"
@@ -254,7 +254,8 @@ class Storage(object):
         file_path = os.path.sep.join(parts)
         return os.path.join(data_dir, file_path)
 
-    def _pack_header(self, tag_list, archive_list, x_files_factor, agg_name):
+    @staticmethod
+    def _pack_header(tag_list, archive_list, x_files_factor, agg_name):
         # tag
         tag = '\t'.join(tag_list)
 
@@ -313,6 +314,44 @@ class Storage(object):
             'archive_list': archives,
         }
         return info
+
+    @staticmethod
+    def add_tag(tag, path, pos_idx):
+        with open(path, 'r+b') as fh:
+            header_info = Storage.header(fh)
+            tag_list = header_info['tag_list']
+            tag_cnt = len(tag_list)
+            diff = len(tag_list[pos_idx]) - len(tag)
+            tag_list[pos_idx] = tag
+
+            archive_list = [(a['sec_per_point'], a['count'])
+                            for a in header_info['archive_list']]
+            agg_name = Agg.get_agg_name(header_info['agg_id'])
+
+            if (diff > 0) and (pos_idx < tag_cnt - 1):
+                tag_list[pos_idx+1] = 'N' * diff
+                packed_header, _ = Storage._pack_header(
+                    tag_list, archive_list, header_info['x_files_factor'], agg_name)
+                fh.write(packed_header)
+            else:
+                if not (pos_idx == tag_cnt - 1):
+                    tag_list[pos_idx+1] = 'N' * DEFAULT_TAG_LENGTH * (tag_cnt-1-pos_idx)
+
+                packed_header, _ = Storage._pack_header(
+                    tag_list, archive_list, header_info['x_files_factor'], agg_name)
+
+                tmpfile = path + '.tmp'
+                with open(tmpfile, 'wb') as fh_tmp:
+                    fh_tmp.write(packed_header)
+                    chunk_size = 16384
+                    fh.seek(header_info['archive_list'][0]['offset'])
+                    while True:
+                        bytes = fh.read(chunk_size)
+                        if not bytes:
+                            break
+                        fh_tmp.write(bytes)
+                os.rename(tmpfile, path)
+
 
     def update(self, path, points, now=None):
         # order points by timestamp, newest first

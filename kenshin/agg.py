@@ -30,3 +30,7 @@ class Agg(object):
     @classmethod
     def get_agg_type_list(cls):
         return cls.agg_type_list
+
+    @classmethod
+    def get_agg_name(cls, agg_id):
+        return cls.agg_type_list[agg_id]

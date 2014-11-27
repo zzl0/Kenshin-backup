@@ -4,6 +4,7 @@ import time
 from threading import Lock
 
 import kenshin
+from kenshin.consts import DEFAULT_TAG_LENGTH
 from rurouni import log
 from rurouni.conf import settings
 from rurouni.storage import getFilePath, getSchema, createLink
@@ -23,9 +24,7 @@ class MetricCache(object):
         self.metrics_fh.close()
 
     def initCache(self):
-        try:
-            self.lock.acquire()
-
+        with self.lock:
             # avoid repeated call
             if self.metrics_fh is not None:
                 return
@@ -41,10 +40,8 @@ class MetricCache(object):
                         pos_idx = schema_cache[file_idx].getPosIdx(schema)
                         metric_idx = (schema.name, file_idx, pos_idx)
                         self.metric_idxs[metric] = metric_idx
-            log.debug("%s" % self.metric_idxs)
+
             self.metrics_fh = open(metrics_file, 'a')
-        finally:
-            self.lock.release()
 
     def put(self, metric, datapoint):
         log.debug("MetricCache received (%s, %s)" % (metric, datapoint))
@@ -53,8 +50,7 @@ class MetricCache(object):
         file_cache.add(pos_idx, datapoint)
 
     def getMetricIdx(self, metric):
-        try:
-            self.lock.acquire()
+        with self.lock:
             if metric in self.metric_idxs:
                 return self.metric_idxs[metric]
             else:
@@ -66,13 +62,11 @@ class MetricCache(object):
                 # create link
                 file_path = getFilePath(schema.name, file_idx)
                 self.metrics_fh.write(metric + '\n')
+                kenshin.add_tag(metric, file_path, pos_idx)
                 createLink(metric, file_path)
-
                 metric_idx = (schema.name, file_idx, pos_idx)
                 self.metric_idxs[metric] = metric_idx
                 return metric_idx
-        finally:
-            self.lock.release()
 
     def getSchemaCache(self, schema):
         try:
@@ -101,14 +95,11 @@ class MetricCache(object):
         return datapoints
 
     def writableFileCaches(self):
-        try:
-            self.lock.acquire()
+        with self.lock:
             return[(schema_name, file_idx)
                    for (schema_name, schema_cache) in self.schema_caches.items()
                    for file_idx in range(schema_cache.size())
                    if schema_cache[file_idx].canWrite()]
-        finally:
-            self.lock.release()
 
 
 class SchemaCache(object):
@@ -132,7 +123,8 @@ class SchemaCache(object):
             if not init:
                 # create file
                 file_path = getFilePath(schema.name, self.curr_idx)
-                tags = ['N'] * schema.metrics_num
+                tmp_str = 'N' * schema.metrics_max_num * DEFAULT_TAG_LENGTH
+                tags = [tmp_str] + [''] * (schema.metrics_max_num - 1)
                 kenshin.create(file_path, tags, schema.archives, schema.xFilesFactor,
                                schema.aggregationMethod)
         return self.curr_idx
@@ -142,77 +134,63 @@ class FileCache(object):
     def __init__(self, schema):
         self.lock = Lock()
         self.curr_size = 0
-        self.metrics_num = schema.metrics_num
+        self.metrics_max_num = schema.metrics_max_num
         self.resolution = schema.archives[0][0]
         self.retention = schema.cache_retention
 
         self.points_num = self.retention / self.resolution
         self.cache_size = int(self.points_num * schema.cache_ratio)
-        self.points = [0] * self.metrics_num * self.cache_size
-        self.base_idxs = [0] * self.metrics_num
+        self.points = [0] * self.metrics_max_num * self.cache_size
+        self.base_idxs = [0] * self.metrics_max_num
 
         self.start_ts = None
         self.start_offset = 0
         self.can_write = False
 
     def getPosIdx(self, schema):
-        try:
-            self.lock.acquire()
+        with self.lock:
             curr_size = self.curr_size
             self.curr_size += 1
             return curr_size
-        finally:
-            self.lock.release()
 
     def metricFull(self):
-        try:
-            self.lock.acquire()
-            return self.curr_size == self.metrics_num
-        finally:
-            self.lock.release()
+        with self.lock:
+            return self.curr_size == self.metrics_max_num
 
     def metricEmpty(self):
-        try:
-            self.lock.acquire()
+        with self.lock:
             return not self.curr_size
-        finally:
-            self.lock.release()
 
     def canWrite(self):
-        try:
-            self.lock.acquire()
+        with self.lock:
             return self.can_write
-        finally:
-            self.lock.release()
 
     def add(self, pos_idx, datapoint):
-        try:
-            self.lock.acquire()
-            if pos_idx not in self.base_idxs:
-                self.base_idxs[pos_idx] = self.cache_size * pos_idx
+        with self.lock:
+            try:
+                if pos_idx not in self.base_idxs:
+                    self.base_idxs[pos_idx] = self.cache_size * pos_idx
 
-            base_idx = self.base_idxs[pos_idx]
-            ts, val = datapoint
+                base_idx = self.base_idxs[pos_idx]
+                ts, val = datapoint
 
-            if self.start_ts is None:
-                self.start_ts = ts - ts % self.resolution
-                self.start_offset = 0
-                offset = 0
-            else:
-                offset = (ts - self.start_ts) / self.resolution
-            idx = base_idx + (self.start_offset + offset) % self.cache_size
+                if self.start_ts is None:
+                    self.start_ts = ts - ts % self.resolution
+                    self.start_offset = 0
+                    offset = 0
+                else:
+                    offset = (ts - self.start_ts) / self.resolution
+                idx = base_idx + (self.start_offset + offset) % self.cache_size
 
-            # can write
-            if ts - self.start_ts - self.retention >= settings.DEFAULT_WAIT_TIME:
-                self.can_write = True
+                # can write
+                if ts - self.start_ts - self.retention >= settings.DEFAULT_WAIT_TIME:
+                    self.can_write = True
 
-            log.debug("add idx: %s, ts %s, start_ts: %s, start_offset: %s, retention: %s" %
-                      (idx, ts, self.start_ts, self.start_offset, self.retention))
-            self.points[idx] = val
-        except Exception as e:
-            log.err('add error in FileCache: %s' % e)
-        finally:
-            self.lock.release()
+                log.debug("add idx: %s, ts %s, start_ts: %s, start_offset: %s, retention: %s" %
+                          (idx, ts, self.start_ts, self.start_offset, self.retention))
+                self.points[idx] = val
+            except Exception as e:
+                log.err('add error in FileCache: %s' % e)
 
     def get_offset(self, ts):
         offset = self.start_offset + (ts - self.start_ts) / self.resolution
@@ -221,8 +199,7 @@ class FileCache(object):
     def get(self, end_ts=None, clear=False):
         if self.metricEmpty():
             return []
-        try:
-            self.lock.acquire()
+        with self.lock:
             begin_offset = self.start_offset
             if end_ts:
                 end_offset = self.get_offset(end_ts)
@@ -232,7 +209,7 @@ class FileCache(object):
             log.debug("begin_offset: %s, end_offset: %s" %
                       (begin_offset, end_offset))
 
-            rs = [None] * self.metrics_num
+            rs = [None] * self.metrics_max_num
             if begin_offset < end_offset:
                 length = end_offset - begin_offset
                 for i, base_idx in enumerate(self.base_idxs[:self.curr_size]):
@@ -256,7 +233,7 @@ class FileCache(object):
                         self.clearPoint(base_idx, end_idx)
 
             # empty metrics
-            for j in range(i+1, self.metrics_num):
+            for j in range(i+1, self.metrics_max_num):
                 rs[j] = [0] * length
 
             # timestamps
@@ -269,9 +246,6 @@ class FileCache(object):
                 self.can_write = False
 
             return zip(timestamps, zip(*rs))
-
-        finally:
-            self.lock.release()
 
     def clearPoint(self, begin_idx, end_idx):
         for i in range(begin_idx, end_idx):

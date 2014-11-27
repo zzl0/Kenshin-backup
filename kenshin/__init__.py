@@ -13,6 +13,7 @@ create = _storage.create
 update = _storage.update
 fetch = _storage.fetch
 header = _storage.header
+add_tag = _storage.add_tag
 
 
 parse_retention_def = RetentionParser.parse_retention_def

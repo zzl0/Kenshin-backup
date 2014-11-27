@@ -45,20 +45,20 @@ class Archive:
         return Archive(*rs)
 
 
-class Schema:
+class Schema(object):
     def match(self, metric):
         raise NotImplementedError()
 
 
 class DefaultSchema(Schema):
     def __init__(self, name, xFilesFactor, aggregationMethod, archives,
-                 cache_retention, metrics_num, cache_ratio):
+                 cache_retention, metrics_max_num, cache_ratio):
         self.name = name
         self.xFilesFactor = xFilesFactor
         self.aggregationMethod = aggregationMethod
         self.archives = archives
         self.cache_retention = cache_retention
-        self.metrics_num = metrics_num
+        self.metrics_max_num = metrics_max_num
         self.cache_ratio = cache_ratio
 
     def match(self, metric):
@@ -67,14 +67,14 @@ class DefaultSchema(Schema):
 
 class PatternSchema(Schema):
     def __init__(self, name, pattern, xFilesFactor, aggregationMethod, archives,
-                 cache_retention, metrics_num, cache_ratio):
+                 cache_retention, metrics_max_num, cache_ratio):
         self.name = name
         self.pattern = re.compile(pattern)
         self.xFilesFactor = xFilesFactor
         self.aggregationMethod = aggregationMethod
         self.archives = archives
         self.cache_retention = cache_retention
-        self.metrics_num = metrics_num
+        self.metrics_max_num = metrics_max_num
         self.cache_ratio = cache_ratio
 
     def match(self, metric):
@@ -96,7 +96,7 @@ def loadStorageSchemas(conf_file):
         archives = [Archive.fromString(s).getTuple() for s in retentions]
         cache_retention = kenshin.RetentionParser.parse_time_str(
             options.get('cacheretention'))
-        metrics_num = options.get('metricsnum')
+        metrics_max_num = options.get('metricsperfile')
         cache_ratio = 1.2
 
         try:
@@ -105,7 +105,7 @@ def loadStorageSchemas(conf_file):
             log.err("Invalid schema found in %s." % section)
 
         schema = PatternSchema(section, pattern, float(xff), agg, archives,
-                               int(cache_retention), int(metrics_num),
+                               int(cache_retention), int(metrics_max_num),
                                float(cache_ratio))
         schema_list.append(schema)
     schema_list.append(defaultSchema)
