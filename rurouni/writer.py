@@ -40,14 +40,13 @@ def writeForever():
 
 
 def writeCachedDataPoints():
-    metrics = MetricCache.writableFileCaches()
-    log.debug("metrics=============: %s" % metrics)
-    if not metrics:
+    file_cache_idxs = MetricCache.writableFileCaches()
+    if not file_cache_idxs:
         return False
 
-    for metric, idx in metrics:
-        datapoints = MetricCache.pop(metric, idx)
-        file_path = getFilePath(metric, idx)
+    for schema_name, file_idx in file_cache_idxs:
+        datapoints = MetricCache.pop(schema_name, file_idx)
+        file_path = getFilePath(schema_name, file_idx)
 
         try:
             t1 = time.time()
@@ -65,6 +64,6 @@ def writeCachedDataPoints():
 
             if settings.LOG_UPDATES:
                 log.updates("wrote %d datapoints for %s in %.5f secs" %
-                            (point_cnt, metric, update_time))
+                            (point_cnt, schema_name, update_time))
 
     return True
