@@ -74,7 +74,7 @@ class TestStorage(unittest.TestCase):
         time_info = (from_ts, now_ts, 1)
         vals = [tuple(map(float, v)) for _, v in sorted(points)]
         expected = (time_info, vals)
-        self.assertEqual(series, expected)
+        self.assertEqual(series[1:], expected)
 
     def _gen_val(self, i):
         return (i, 10+i)
@@ -89,4 +89,4 @@ class TestStorage(unittest.TestCase):
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
         time_info = (from_ts, roundup(now_ts, 3), 3)
         expected = time_info, [(5.0, 15.0), (2.0, 12.0), None]
-        self.assertEqual(series, expected)
+        self.assertEqual(series[1:], expected)
