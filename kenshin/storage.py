@@ -599,4 +599,4 @@ class Storage(object):
             curr_interval += sec_per_point
 
         time_info = (from_time, until_time, sec_per_point)
-        return time_info, val_list
+        return header, time_info, val_list

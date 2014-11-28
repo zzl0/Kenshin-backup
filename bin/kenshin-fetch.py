@@ -1,26 +1,45 @@
 #!/usr/bin/env python
 # coding: utf-8
-
+import sys
 import time
+import optparse
 import kenshin
 
 
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) < 3:
-        print 'Usage: kenshin-info.py <file_path> <from_ts> [<now_ts>]'
-        sys.exit(1)
-    path = sys.argv[1]
-    from_ts = int(sys.argv[2])
-    try:
-        now_ts = int(sys.argv[3])
-    except:
-        now_ts = int(time.time())
+def main():
+    NOW = int(time.time())
+    YESTERDAY = NOW - 24 * 60 * 60
 
-    timeinfo, points = kenshin.fetch(path, from_ts, now_ts, now_ts)
+    usage = "%prog [options] path"
+    option_parser = optparse.OptionParser(usage=usage)
+    option_parser.add_option('--from', default=YESTERDAY, type=int,
+        dest='_from', help="begin timestamp(default: 24 hours ago)")
+    option_parser.add_option('--until', default=NOW, type=int,
+        help="end timestamp")
+    option_parser.add_option('--metric', '-m', default='',
+        help="metric name")
+
+    (options, args) = option_parser.parse_args()
+    if len(args) != 1:
+        option_parser.print_help()
+        sys.exit(1)
+
+    path = args[0]
+    from_time = int(options._from)
+    until_time = int(options.until)
+
+    header, timeinfo, points = kenshin.fetch(path, from_time, until_time, NOW)
     start, end, step = timeinfo
+
+    if options.metric:
+        idx = header['tag_list'].index(options.metric)
+        points = (p[idx] if p else None for p in points)
 
     t = start
     for p in points:
-        print '%s\t%s' % (t, p)
+        print "%s\t%s" % (t, p)
         t += step
+
+
+if __name__ == '__main__':
+    main()
