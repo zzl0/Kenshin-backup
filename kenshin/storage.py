@@ -256,7 +256,7 @@ class Storage(object):
     @staticmethod
     def _pack_header(tag_list, archive_list, x_files_factor, agg_name):
         # tag
-        tag = '\t'.join(tag_list)
+        tag = str('\t'.join(tag_list))
 
         # metadata
         agg_id = Agg.get_agg_id(agg_name)

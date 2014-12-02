@@ -138,7 +138,8 @@ class FileCache(object):
         self.resolution = schema.archives[0][0]
         self.retention = schema.cache_retention
 
-        self.points_num = self.retention / self.resolution
+        # +1 to avoid self.points_num == 0
+        self.points_num = self.retention / self.resolution + 1
         self.cache_size = int(self.points_num * schema.cache_ratio)
         self.points = [0] * self.metrics_max_num * self.cache_size
         self.base_idxs = [0] * self.metrics_max_num
