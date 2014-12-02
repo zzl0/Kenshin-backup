@@ -563,7 +563,7 @@ class Storage(object):
             cnt = (until_time - from_time) / step
             time_info = (from_time, until_time, step)
             val_list = [None] * cnt
-            return (time_info, val_list)
+            return (header, time_info, val_list)
 
         from_offset = self._timestamp2offset(from_time, base_ts, header, archive)
         until_offset = self._timestamp2offset(until_time, base_ts, header, archive)
