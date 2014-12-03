@@ -256,7 +256,7 @@ class Storage(object):
     @staticmethod
     def _pack_header(tag_list, archive_list, x_files_factor, agg_name):
         # tag
-        tag = '\t'.join(tag_list)
+        tag = str('\t'.join(tag_list))
 
         # metadata
         agg_id = Agg.get_agg_id(agg_name)
@@ -563,7 +563,7 @@ class Storage(object):
             cnt = (until_time - from_time) / step
             time_info = (from_time, until_time, step)
             val_list = [None] * cnt
-            return (time_info, val_list)
+            return (header, time_info, val_list)
 
         from_offset = self._timestamp2offset(from_time, base_ts, header, archive)
         until_offset = self._timestamp2offset(until_time, base_ts, header, archive)
