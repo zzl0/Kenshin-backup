@@ -1,8 +1,7 @@
 # coding: utf-8
 import os
 import sys
-import __builtin__
-from os.path import dirname, basename, join, abspath
+from os.path import dirname, basename, join, abspath, splitext
 
 
 def run_twistd_plugin(filename):
@@ -14,7 +13,7 @@ def run_twistd_plugin(filename):
     root_dir = dirname(bin_dir)
     os.environ.setdefault('GRAPHITE_ROOT', root_dir)
 
-    program = basename(filename).split('.')[0]
+    program = splitext(basename(filename))[0]
     parser = get_parser()
     (options, args) = parser.parse_args()
 
