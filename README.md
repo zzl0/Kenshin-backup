@@ -29,7 +29,7 @@ Tests can be run using nosetests:
 TODO
 --------------
 
-- web interface
-- interface redesign
-- name collision
+- [x] web interface
+- [x] interface redesign
+- [x] name collision
 - migration tool

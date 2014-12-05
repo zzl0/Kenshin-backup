@@ -1,0 +1,21 @@
+[cache]
+# Configure rurouni directories.
+
+# OS environment variables can be used to tell rurouni
+# where to read configuration from and where to write data.
+
+# GRAPHITE_ROOT   - Root directory. Defaults to ../
+# GRAPHITE_CONF   - Configuration directory (where this file lives).
+#                   Defaults to $GRAPHITE_ROOT/conf
+# STORAGE_DIR     - Storage directory for data.
+#                   Defaults to $GRAPHITE_ROOT/storage
+
+# To change other directory paths, add settings to this file.
+# The following configuration variables are avaiable with these
+# default values:
+
+# LOCAL_DATA_DIR  = $STORAGE_DIR/data
+# LOCAL_LINK_DIR  = $STORAGE_DIR/link
+# CONF_DIR        = $GRAPHITE_CONF
+# LOG_DIR         = $STORAGE_DIR/log
+# PID_DIR         = $STORAGE_DIR/run

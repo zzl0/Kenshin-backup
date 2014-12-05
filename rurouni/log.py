@@ -20,7 +20,7 @@ class RurouniLogObserver(object):
         self.logdir = logdir
         self.console_logfile = DailyLogFile('console.log', logdir)
         self.custom_logs = {}
-        self.observer = self.logdirObServer
+        self.observer = self.logdirObserver
 
     def logToSyslog(self, prefix):
         observer = SysLogObserver(prefix).emit

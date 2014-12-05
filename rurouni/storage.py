@@ -13,12 +13,13 @@ from rurouni.conf import settings, OrderedConfigParser
 
 
 def getFilePath(schema_name, file_idx):
-    return join(settings.LOCAL_DATA_DIR, 'data', schema_name, '%d.hs' % file_idx)
+    return join(settings.LOCAL_DATA_DIR, settings['instance'],
+                schema_name, '%d.hs' % file_idx)
 
 
 def getMetricPath(metric):
     path = metric.replace('.', sep)
-    return join(settings.LOCAL_DATA_DIR, 'link', path + '.hs')
+    return join(settings.LOCAL_LINK_DIR, settings['instance'], path + '.hs')
 
 
 def createLink(metric, file_path):

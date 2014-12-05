@@ -21,7 +21,8 @@ class MetricCache(object):
         self.metrics_fh = None
 
     def __del__(self):
-        self.metrics_fh.close()
+        if self.metrics_fh is not None:
+            self.metrics_fh.close()
 
     def initCache(self):
         with self.lock:
@@ -166,7 +167,17 @@ class FileCache(object):
         with self.lock:
             return self.can_write
 
+    def setWrite(self, timestamp):
+        """
+        Check write condition, if this cache can write to file,
+        then set canWrite flag.
+        """
+        if timestamp - self.start_ts - self.retention >= settings.DEFAULT_WAIT_TIME:
+            self.can_write = True
+
     def add(self, pos_idx, datapoint):
+        log.debug("retention: %s, cache_size: %s, points_num: %s" %
+                  (self.retention, self.cache_size, self.points_num))
         with self.lock:
             try:
                 if pos_idx not in self.base_idxs:
@@ -183,10 +194,7 @@ class FileCache(object):
                     offset = (ts - self.start_ts) / self.resolution
                 idx = base_idx + (self.start_offset + offset) % self.cache_size
 
-                # can write
-                if ts - self.start_ts - self.retention >= settings.DEFAULT_WAIT_TIME:
-                    self.can_write = True
-
+                self.setWrite(ts)
                 log.debug("add idx: %s, ts %s, start_ts: %s, start_offset: %s, retention: %s" %
                           (idx, ts, self.start_ts, self.start_offset, self.retention))
                 self.points[idx] = val
