@@ -86,9 +86,6 @@ class MetricCache(object):
         data = file_cache.get(end_ts=now)
         return [(ts, val[pos_idx]) for ts, val in data]
 
-    def gets(self, metric):
-        pass
-
     def pop(self, schema_name, file_idx):
         file_cache = self.schema_caches[schema_name][file_idx]
         datapoints = file_cache.get(clear=True)
@@ -143,7 +140,7 @@ class FileCache(object):
         self.points_num = self.retention / self.resolution + 1
         self.cache_size = int(self.points_num * schema.cache_ratio)
         self.points = [0] * self.metrics_max_num * self.cache_size
-        self.base_idxs = [0] * self.metrics_max_num
+        self.base_idxs = [i * self.cache_size for i in xrange(self.metrics_max_num)]
 
         self.start_ts = None
         self.start_offset = 0
@@ -161,7 +158,7 @@ class FileCache(object):
 
     def metricEmpty(self):
         with self.lock:
-            return not self.curr_size
+            return not self.start_ts
 
     def canWrite(self):
         with self.lock:
@@ -180,9 +177,6 @@ class FileCache(object):
                   (self.retention, self.cache_size, self.points_num))
         with self.lock:
             try:
-                if pos_idx not in self.base_idxs:
-                    self.base_idxs[pos_idx] = self.cache_size * pos_idx
-
                 base_idx = self.base_idxs[pos_idx]
                 ts, val = datapoint
 
