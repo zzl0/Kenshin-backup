@@ -248,7 +248,7 @@ def read_config(program, options):
     settings['LOG_DIR'] = join(settings['STORAGE_DIR'], 'log', program)
 
     if options['config'] is None:
-        options['config'] = join(conf_dir, 'rurouni.conf')
+        options['config'] = join(settings['CONF_DIR'], 'rurouni.conf')
     else:
         settings['CONF_DIR'] = dirname(normpath(options['config']))
 
