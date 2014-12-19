@@ -169,7 +169,8 @@ class FileCache(object):
         Check write condition, if this cache can write to file,
         then set canWrite flag.
         """
-        if timestamp - self.start_ts - self.retention >= settings.DEFAULT_WAIT_TIME:
+        if not self.can_write and \
+           (timestamp - self.start_ts - self.retention >= settings.DEFAULT_WAIT_TIME):
             self.can_write = True
 
     def add(self, pos_idx, datapoint):
@@ -188,9 +189,9 @@ class FileCache(object):
                     offset = (ts - self.start_ts) / self.resolution
                 idx = base_idx + (self.start_offset + offset) % self.cache_size
 
-                self.setWrite(ts)
-                log.debug("add idx: %s, ts %s, start_ts: %s, start_offset: %s, retention: %s" %
+                log.debug("add idx: %s, ts: %s, start_ts: %s, start_offset: %s, retention: %s" %
                           (idx, ts, self.start_ts, self.start_offset, self.retention))
+                self.setWrite(ts)
                 self.points[idx] = val
             except Exception as e:
                 log.err('add error in FileCache: %s' % e)
