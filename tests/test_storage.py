@@ -8,6 +8,7 @@ from kenshin.storage import (
     Storage, METADATA_SIZE, METADATA_FORMAT, POINT_FORMAT)
 from kenshin.agg import Agg
 from kenshin.utils import mkdir_p, roundup
+from kenshin.consts import NULL_VALUE
 
 
 class TestStorage(unittest.TestCase):
@@ -89,4 +90,20 @@ class TestStorage(unittest.TestCase):
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
         time_info = (from_ts, roundup(now_ts, 3), 3)
         expected = time_info, [(5.0, 15.0), (2.0, 12.0), None]
+        self.assertEqual(series[1:], expected)
+
+    def test_null_point(self):
+        now_ts = 1411628779
+        num_points = 6
+        points = [(now_ts - i, self._gen_val(i)) for i in range(1, num_points+1)]
+        # change the last two points to null value
+        points[4] = (now_ts - 5, (NULL_VALUE, NULL_VALUE))
+        points[5] = (now_ts - 6, (NULL_VALUE, NULL_VALUE))
+
+        self.storage.update(self.path, points, now_ts)
+
+        from_ts = now_ts - num_points - 1
+        series = self.storage.fetch(self.path, from_ts, now=now_ts)
+        time_info = (from_ts, roundup(now_ts, 3), 3)
+        expected = time_info, [None, (2.0, 12.0), None]
         self.assertEqual(series[1:], expected)

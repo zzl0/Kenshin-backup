@@ -59,3 +59,7 @@ target/
 
 # test data
 data/
+
+# ctags
+.tags_sorted_by_file
+.tags

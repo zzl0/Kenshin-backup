@@ -8,7 +8,6 @@ from twisted.internet.error import ConnectionDone
 from rurouni.state import events
 from rurouni import log
 from rurouni.cache import MetricCache
-from rurouni.metric_adapter import changeMetric
 
 
 ### metric receiver
