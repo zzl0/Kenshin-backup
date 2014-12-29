@@ -4,7 +4,7 @@ import time
 from threading import Lock
 
 import kenshin
-from kenshin.consts import DEFAULT_TAG_LENGTH
+from kenshin.consts import DEFAULT_TAG_LENGTH, NULL_VALUE
 from rurouni import log
 from rurouni.conf import settings
 from rurouni.storage import getFilePath, getSchema, createLink
@@ -139,7 +139,7 @@ class FileCache(object):
         # +1 to avoid self.points_num == 0
         self.points_num = self.retention / self.resolution + 1
         self.cache_size = int(self.points_num * schema.cache_ratio)
-        self.points = [0] * self.metrics_max_num * self.cache_size
+        self.points = [NULL_VALUE] * self.metrics_max_num * self.cache_size
         self.base_idxs = [i * self.cache_size for i in xrange(self.metrics_max_num)]
 
         self.start_ts = None
@@ -253,7 +253,7 @@ class FileCache(object):
 
     def clearPoint(self, begin_idx, end_idx):
         for i in range(begin_idx, end_idx):
-            self.points[i] = 0
+            self.points[i] = NULL_VALUE
 
 
 MetricCache = MetricCache()

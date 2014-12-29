@@ -23,7 +23,7 @@ import operator
 import inspect
 from agg import Agg
 from utils import mkdir_p, roundup
-from consts import DEFAULT_TAG_LENGTH
+from consts import DEFAULT_TAG_LENGTH, NULL_VALUE
 
 
 LONG_FORMAT = "!L"
@@ -519,8 +519,13 @@ class Storage(object):
                            for i in xrange(0, len(higher_points), step)])
         points = points.transpose()
         ts = int(points[0][-1])
-        val = [agg_func(x) for x in points[1:]]
+        val = [agg_func(self.filter_points(x)) for x in points[1:]]
         return ts, val
+
+    @staticmethod
+    def filter_points(points):
+        rs = [p for p in points if p != NULL_VALUE]
+        return rs if rs else [NULL_VALUE]
 
     def fetch(self, path, from_time, until_time=None, now=None):
         with open(path, 'rb') as f:
@@ -595,8 +600,18 @@ class Storage(object):
             point_ts = unpacked_series[i]
             if point_ts == curr_interval:
                 val = unpacked_series[i+1: i+step]
-                val_list[i/step] = val
+                val_list[i/step] = self._conver_null_value(val)
             curr_interval += sec_per_point
 
         time_info = (from_time, until_time, sec_per_point)
         return header, time_info, val_list
+
+    @staticmethod
+    def _conver_null_value(point_val):
+        val = [None if x == NULL_VALUE else x
+               for x in point_val]
+        if set(val) == {None}:
+            return None
+        else:
+            return tuple(val)
+
