@@ -5,6 +5,7 @@ from threading import Lock
 
 import kenshin
 from kenshin.consts import DEFAULT_TAG_LENGTH, NULL_VALUE
+from kenshin.utils import is_null_value
 from rurouni import log
 from rurouni.conf import settings
 from rurouni.storage import getFilePath, getSchema, createLink
@@ -84,7 +85,8 @@ class MetricCache(object):
         file_cache = self.schema_caches[schema_name][file_idx]
         now = int(time.time())
         data = file_cache.get(end_ts=now)
-        return [(ts, val[pos_idx]) for ts, val in data]
+        return [(ts, val[pos_idx]) for ts, val in data
+                                   if not is_null_value(val[pos_idx])]
 
     def pop(self, schema_name, file_idx):
         file_cache = self.schema_caches[schema_name][file_idx]

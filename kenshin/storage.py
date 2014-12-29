@@ -21,8 +21,9 @@ import math
 import struct
 import operator
 import inspect
+
 from agg import Agg
-from utils import mkdir_p, roundup
+from utils import mkdir_p, roundup, is_null_value
 from consts import DEFAULT_TAG_LENGTH, NULL_VALUE
 
 
@@ -524,7 +525,7 @@ class Storage(object):
 
     @staticmethod
     def filter_points(points):
-        rs = [p for p in points if p != NULL_VALUE]
+        rs = [p for p in points if not is_null_value(p)]
         return rs if rs else [NULL_VALUE]
 
     def fetch(self, path, from_time, until_time=None, now=None):
@@ -608,7 +609,7 @@ class Storage(object):
 
     @staticmethod
     def _conver_null_value(point_val):
-        val = [None if x == NULL_VALUE else x
+        val = [None if is_null_value(x) else x
                for x in point_val]
         if set(val) == {None}:
             return None
