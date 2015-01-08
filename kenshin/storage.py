@@ -359,15 +359,34 @@ class Storage(object):
             header = self.header(f)
             if now is None:
                 now = int(time.time())
-            archive_list = iter(header['archive_list'])
-            first_archive = header['archive_list'][0]
-            first_retention = first_archive['retention']
+            archive_list = header['archive_list']
+            i = 0
+            curr_archive = archive_list[i]
+            curr_points = []
 
-            # remove outdated points
-            curr_points = [p for p in points
-                           if first_retention >= (now-p[0])]
-            if curr_points:
-                self._update_archive(f, header, first_archive, curr_points, 0)
+            for point in points:
+                age = now - point[0]
+
+                while age > curr_archive['retention']:
+                    # we can't fit any more points in archive i
+                    if curr_points:
+                        self._update_archive(f, header, curr_archive, curr_points, i)
+                        curr_points = []
+                    try:
+                        curr_archive = archive_list[i+1]
+                        i += 1
+                    except IndexError:
+                        curr_archive = None
+                        break
+
+                if not curr_archive:
+                    # drop remaining points that don't fit in the database
+                    break
+
+                curr_points.append(point)
+
+            if curr_archive and curr_points:
+                self._update_archive(f, header, curr_archive, curr_points, i)
 
     def _update_archive(self, fh, header, archive, points, archive_idx):
         time_step = archive['sec_per_point']
