@@ -107,3 +107,29 @@ class TestStorage(unittest.TestCase):
         time_info = (from_ts, roundup(now_ts, 3), 3)
         expected = time_info, [None, (2.0, 12.0), None]
         self.assertEqual(series[1:], expected)
+
+    def test_update_old_points(self):
+        now_ts = 1411628779
+        num_points = 12
+        points = [(now_ts - i, self._gen_val(i)) for i in range(7, num_points+1)]
+        self.storage.update(self.path, points, now_ts)
+
+        from_ts = now_ts - num_points - 1
+        series = self.storage.fetch(self.path, from_ts, now=now_ts)
+        time_info = (from_ts, roundup(now_ts, 3), 3)
+        expected = time_info, [(12.0, 22.0), (10.0, 20.0), (7.0, 17.0), None, None]
+        self.assertEqual(series[1:], expected)
+
+    def print_file_content(self):
+        with open(self.path) as f:
+            header = self.storage.header(f)
+            archive_list = header['archive_list']
+            for i, archive in enumerate(archive_list):
+                print "--------- archive %d ------------" % i
+                print archive
+                f.seek(archive['offset'])
+                series_str = f.read(archive['size'])
+                point_format = header['point_format']
+                series_format = point_format[0] + point_format[1:] * archive['count']
+                unpacked_series = struct.unpack(series_format, series_str)
+                print unpacked_series
