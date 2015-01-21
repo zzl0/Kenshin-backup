@@ -19,7 +19,7 @@ class TestAgg(unittest.TestCase):
             self.assertEqual(id_, i)
 
     def test_agg_avg(self):
-        func = self._get_agg_func_by_name('avg')
+        func = self._get_agg_func_by_name('average')
         self.assertEqual(func(self.vals), 4.5)
 
     def test_agg_sum(self):

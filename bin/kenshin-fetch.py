@@ -3,7 +3,11 @@
 import sys
 import time
 import optparse
+import signal
 import kenshin
+
+
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 
 def main():
