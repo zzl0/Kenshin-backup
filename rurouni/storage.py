@@ -26,6 +26,8 @@ def createLink(metric, file_path):
     metric_path = getMetricPath(metric)
     dir_name = os.path.dirname(metric_path)
     mkdir_p(dir_name)
+    if os.path.exists(metric_path):
+        os.rename(metric_path, metric_path+'.bak')
     os.symlink(file_path, metric_path)
 
 
