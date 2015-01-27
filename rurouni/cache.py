@@ -4,7 +4,7 @@ import time
 from threading import Lock
 
 import kenshin
-from kenshin.consts import DEFAULT_TAG_LENGTH, NULL_VALUE
+from kenshin.consts import NULL_VALUE
 from kenshin.utils import is_null_value
 from rurouni import log
 from rurouni.conf import settings
@@ -123,8 +123,7 @@ class SchemaCache(object):
 
         # create file
         file_path = getFilePath(schema.name, self.curr_idx)
-        tmp_str = 'N' * DEFAULT_TAG_LENGTH
-        tags = [tmp_str] + [''] * (schema.metrics_max_num - 1)
+        tags = [''] * schema.metrics_max_num
         kenshin.create(file_path, tags, schema.archives, schema.xFilesFactor,
                        schema.aggregationMethod)
         return self.curr_idx
