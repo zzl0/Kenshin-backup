@@ -39,6 +39,8 @@ METADATA_SIZE = struct.calcsize(METADATA_FORMAT)
 ARCHIVEINFO_FORMAT = "!3L"
 ARCHIVEINFO_SIZE = struct.calcsize(ARCHIVEINFO_FORMAT)
 
+RESERVED_INDEX = -1
+
 
 ### Exceptions
 
@@ -172,9 +174,12 @@ class Storage(object):
         else:
             mkdir_p(os.path.dirname(path))
 
+        # inter_tag_list[RESERVED_INDEX] is reserved space, to avoid move data points.
+        inter_tag_list = tag_list + ['N' * DEFAULT_TAG_LENGTH * len(tag_list)]
+
         with open(path, 'wb') as f:
             packed_header, end_offset = self._pack_header(
-                tag_list, archive_list, x_files_factor, agg_name)
+                inter_tag_list, archive_list, x_files_factor, agg_name)
             f.write(packed_header)
 
             # init data
@@ -255,9 +260,9 @@ class Storage(object):
         return os.path.join(data_dir, file_path)
 
     @staticmethod
-    def _pack_header(tag_list, archive_list, x_files_factor, agg_name):
+    def _pack_header(inter_tag_list, archive_list, x_files_factor, agg_name):
         # tag
-        tag = str('\t'.join(tag_list))
+        tag = str('\t'.join(inter_tag_list))
 
         # metadata
         agg_id = Agg.get_agg_id(agg_name)
@@ -265,7 +270,7 @@ class Storage(object):
         xff = x_files_factor
         archive_cnt = len(archive_list)
         tag_size = len(tag)
-        point_size = struct.calcsize(POINT_FORMAT % len(tag_list))
+        point_size = struct.calcsize(POINT_FORMAT % (len(inter_tag_list) - 1))
         metadata = struct.pack(METADATA_FORMAT, agg_id, max_retention,
             xff, archive_cnt, tag_size, point_size)
 
@@ -287,7 +292,7 @@ class Storage(object):
         packed_metadata = fh.read(METADATA_SIZE)
         agg_id, max_retention, xff, archive_cnt, tag_size, point_size = struct.unpack(
             METADATA_FORMAT, packed_metadata)
-        tag_list = fh.read(tag_size).split('\t')
+        inter_tag_list = fh.read(tag_size).split('\t')
 
         archives = []
         for i in xrange(archive_cnt):
@@ -304,11 +309,13 @@ class Storage(object):
             archives.append(archive_info)
 
         fh.seek(origin_offset)
+        tag_list = inter_tag_list[:RESERVED_INDEX]
         info = {
             'agg_id': agg_id,
             'max_retention': max_retention,
             'x_files_factor': xff,
             'tag_list': tag_list,
+            'reserved_size': len(inter_tag_list[RESERVED_INDEX]),
             'point_size': point_size,
             'point_format': POINT_FORMAT % len(tag_list),
             'archive_list': archives,
@@ -321,25 +328,24 @@ class Storage(object):
             header_info = Storage.header(fh)
             tag_list = header_info['tag_list']
             tag_cnt = len(tag_list)
-            diff = len(tag_list[pos_idx]) - len(tag)
-            tag_list[pos_idx] = tag
+            reserved_size = header_info['reserved_size']
 
             archive_list = [(a['sec_per_point'], a['count'])
                             for a in header_info['archive_list']]
             agg_name = Agg.get_agg_name(header_info['agg_id'])
 
-            if (diff > 0) and (pos_idx < tag_cnt - 1):
-                tag_list[pos_idx+1] = 'N' * diff
+            if len(tag) <= len(tag_list[pos_idx]) + reserved_size:
+                diff = len(tag_list[pos_idx]) + reserved_size - len(tag)
+                tag_list[pos_idx] = tag
+                inter_tag_list = tag_list + ['N' * diff]
                 packed_header, _ = Storage._pack_header(
-                    tag_list, archive_list, header_info['x_files_factor'], agg_name)
+                    inter_tag_list, archive_list, header_info['x_files_factor'], agg_name)
                 fh.write(packed_header)
             else:
-                if not (pos_idx == tag_cnt - 1):
-                    tag_list[pos_idx+1] = 'N' * DEFAULT_TAG_LENGTH * (tag_cnt-1-pos_idx)
-
+                tag_list[pos_idx] = tag
+                inter_tag_list = tag_list + ['']
                 packed_header, _ = Storage._pack_header(
-                    tag_list, archive_list, header_info['x_files_factor'], agg_name)
-
+                    inter_tag_list, archive_list, header_info['x_files_factor'], agg_name)
                 tmpfile = path + '.tmp'
                 with open(tmpfile, 'wb') as fh_tmp:
                     fh_tmp.write(packed_header)

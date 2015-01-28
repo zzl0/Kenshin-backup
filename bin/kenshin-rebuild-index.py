@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# coding: utf-8
+
 import os
 import sys
 import glob
@@ -22,8 +25,8 @@ def main():
                 file_id = splitext(basename(fp))[0]
                 for i, metric in enumerate(metric_list):
                     if metric != '':
-                        out.write('%s %s %s\n' %
-                                  (metric, file_id, i))
+                        out.write('%s %s %s %s\n' %
+                                  (metric, schema_name, file_id, i))
     out.close()
 
 
