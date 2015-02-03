@@ -8,7 +8,7 @@ import operator
 
 class Agg(object):
     agg_funcs = [
-        ['avg', lambda x: sum(x) / len(x)],
+        ['average', lambda x: sum(x) / len(x)],
         ['sum', sum],
         ['last', operator.itemgetter(-1)],
         ['max', max],

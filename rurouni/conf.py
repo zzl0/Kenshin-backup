@@ -1,5 +1,6 @@
 # coding: utf-8
 import os
+import errno
 from os.path import join, normpath, expanduser, dirname, exists, isdir
 from collections import OrderedDict
 from ConfigParser import ConfigParser
@@ -263,7 +264,7 @@ def read_config(program, options):
 
     # read configuration file
     settings.readFrom(config, section)
-    settings.readFrom(config, '%s-%s' % (section, instance))
+    settings.readFrom(config, '%s:%s' % (section, instance))
 
     settings['pidfile'] = (
         options['pidfile'] or
@@ -287,4 +288,4 @@ def _process_alive(pid):
             os.kill(int(pid), 0)
             return True
         except OSError as e:
-            return err.errno == errno.EPERM
+            return e.errno == errno.EPERM

@@ -178,7 +178,7 @@ class Storage(object):
         inter_tag_list = tag_list + ['N' * DEFAULT_TAG_LENGTH * len(tag_list)]
 
         with open(path, 'wb') as f:
-            packed_header, end_offset = self._pack_header(
+            packed_header, end_offset = self.pack_header(
                 inter_tag_list, archive_list, x_files_factor, agg_name)
             f.write(packed_header)
 
@@ -260,7 +260,7 @@ class Storage(object):
         return os.path.join(data_dir, file_path)
 
     @staticmethod
-    def _pack_header(inter_tag_list, archive_list, x_files_factor, agg_name):
+    def pack_header(inter_tag_list, archive_list, x_files_factor, agg_name):
         # tag
         tag = str('\t'.join(inter_tag_list))
 
@@ -338,13 +338,13 @@ class Storage(object):
                 diff = len(tag_list[pos_idx]) + reserved_size - len(tag)
                 tag_list[pos_idx] = tag
                 inter_tag_list = tag_list + ['N' * diff]
-                packed_header, _ = Storage._pack_header(
+                packed_header, _ = Storage.pack_header(
                     inter_tag_list, archive_list, header_info['x_files_factor'], agg_name)
                 fh.write(packed_header)
             else:
                 tag_list[pos_idx] = tag
                 inter_tag_list = tag_list + ['']
-                packed_header, _ = Storage._pack_header(
+                packed_header, _ = Storage.pack_header(
                     inter_tag_list, archive_list, header_info['x_files_factor'], agg_name)
                 tmpfile = path + '.tmp'
                 with open(tmpfile, 'wb') as fh_tmp:
@@ -640,4 +640,3 @@ class Storage(object):
             return None
         else:
             return tuple(val)
-
