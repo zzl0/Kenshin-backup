@@ -287,6 +287,7 @@ def main():
                 meta["instance"] = instance
                 meta["metrics_max_num"] = schema.metrics_max_num
                 meta["schema_name"] = schema.name
+                meta["xff"] = schema.xFilesFactor
                 new_metrics_schemas[key][META] = meta
 
             # set index file handler
