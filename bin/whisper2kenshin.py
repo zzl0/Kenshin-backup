@@ -305,7 +305,9 @@ def main():
                 new_metrics_schemas[key][METRICS] = []
                 new_metrics_schemas[key][ID] += 1
 
-        for key, val in new_metrics_schemas.items():
+        for (instance, _), val in new_metrics_schemas.items():
+            output_dir = instances_info[instance]['local_data_dir']
+            link_dir = instances_info[instance]['local_link_dir']
             if len(val[METRICS]):
                 item = get_queue_item(val, args.data_dir, output_dir, link_dir)
                 queue.put(item)
