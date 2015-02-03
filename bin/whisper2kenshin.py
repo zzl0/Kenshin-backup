@@ -136,11 +136,23 @@ def metric_to_filepath(metric, data_dir):
     return os.path.sep.join([data_dir] + metric.split('.')) + '.wsp'
 
 
+def gen_links(metrics, data_path, link_dir, instance):
+    for m in metrics:
+        link_path = m.replace('.', os.path.sep)
+        link_path = os.path.join(link_dir, instance, link_path + '.hs')
+        dirname = os.path.dirname(link_path)
+        mkdir_p(dirname)
+        if os.path.exists(link_path):
+            os.remove(link_path)
+        os.symlink(data_path, link_path)
+
+
 def worker(queue):
-    for (id, meta, metrics, data_dir, output_dir) in iter(queue.get, 'STOP'):
+    for (id, meta, metrics, data_dir, output_dir, link_dir) in iter(queue.get, 'STOP'):
         output_file = gen_output_file(id, meta, output_dir)
         try:
             merge_files(meta, metrics, data_dir, output_file)
+            gen_links(metrics, output_file, link_dir, meta['instance'])
         except Exception as e:
             print >>sys.stderr, '[merge error] %s: metrics[0]=%s' % (e, metrics[0])
             if os.path.exists(output_file):
@@ -148,8 +160,8 @@ def worker(queue):
     return True
 
 
-def get_queue_item(val, data_dir, output_dir):
-    return val[ID], val[META], val[METRICS], data_dir, output_dir
+def get_queue_item(val, data_dir, output_dir, link_dir):
+    return val[ID], val[META], val[METRICS], data_dir, output_dir, link_dir
 
 
 def write_to_index(val):
@@ -216,7 +228,9 @@ def skip_metric(metric, metric_data_path, kenshin_schema, whisper_schema):
         for i in range(len(kenshin_schema.archives)):
             if kenshin_schema.archives[i] != whisper_schema.archives[i]:
                 flag = True
-                reason = reason_pat % ("archive(%d) not match %s %s" % (i, kenshin_schema.archives[i], whisper_schema.archives[i]))
+                reason = reason_pat % ("archive(%d) not match %s %s" %
+                                       (i, kenshin_schema.archives[i],
+                                        whisper_schema.archives[i]))
                 break
     if flag:
         print >>sys.stderr, reason
@@ -262,6 +276,7 @@ def main():
 
             instance = get_instance(metric, len(instances_info))
             output_dir = instances_info[instance]['local_data_dir']
+            link_dir = instances_info[instance]['local_link_dir']
             key = (instance, schema.name)
             # value is: [ID, META, METRICS, INDEX_FH]
             new_metrics_schemas.setdefault(key, [0, None, [], None])
@@ -284,7 +299,7 @@ def main():
             # add a group of metrics to the queue
             if len(new_metrics_schemas[key][METRICS]) == schema.metrics_max_num:
                 val = new_metrics_schemas[key]
-                item = get_queue_item(val, args.data_dir, output_dir)
+                item = get_queue_item(val, args.data_dir, output_dir, link_dir)
                 queue.put(item)
                 write_to_index(val)
                 new_metrics_schemas[key][METRICS] = []
@@ -292,7 +307,7 @@ def main():
 
         for key, val in new_metrics_schemas.items():
             if len(val[METRICS]):
-                item = get_queue_item(val, args.data_dir, output_dir)
+                item = get_queue_item(val, args.data_dir, output_dir, link_dir)
                 queue.put(item)
                 write_to_index(val)
 
