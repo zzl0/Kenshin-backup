@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
+import os
 import sys
+import re
 import time
 import optparse
 import signal
@@ -20,8 +22,6 @@ def main():
         dest='_from', help="begin timestamp(default: 24 hours ago)")
     option_parser.add_option('--until', default=NOW, type=int,
         help="end timestamp")
-    option_parser.add_option('--metric', '-m', default='',
-        help="metric name")
 
     (options, args) = option_parser.parse_args()
     if len(args) != 1:
@@ -29,14 +29,22 @@ def main():
         sys.exit(1)
 
     path = args[0]
+    abspath = os.path.abspath(path)
+    realpath = os.path.realpath(path)
+    if abspath != realpath:
+        metric = re.split('/link/[a-z]/', abspath)[1]
+        metric = metric[:-3]  # remove .hs
+        metric = metric.replace('/', '.')
+    else:
+        metric = None
     from_time = int(options._from)
     until_time = int(options.until)
 
     header, timeinfo, points = kenshin.fetch(path, from_time, until_time, NOW)
     start, end, step = timeinfo
 
-    if options.metric:
-        idx = header['tag_list'].index(options.metric)
+    if metric:
+        idx = header['tag_list'].index(metric)
         points = (p[idx] if p else None for p in points)
 
     t = start
