@@ -6,12 +6,13 @@ import struct
 import string
 import fnv1a
 from multiprocessing import Process, Queue
+from ConfigParser import ConfigParser
 
 from kenshin import storage
 from kenshin.consts import NULL_VALUE
 from kenshin.storage import Storage
 from kenshin.tools.whisper_tool import (read_header, metadataSize,
-    pointFormat, pointSize, get_agg_name)
+    pointFormat, pointSize, get_agg_name, gen_whisper_schema_func)
 from kenshin.tools.hash import Hash
 from kenshin.utils import mkdir_p
 from rurouni.storage import loadStorageSchemas
@@ -94,16 +95,16 @@ def packed_kenshin_points(points):
 
 
 def gen_output_file(id, meta, output_dir):
-    return os.path.sep.join([output_dir, meta['instance'], str(id)]) + '.hs'
+    return os.path.join(output_dir, meta['instance'],
+                        meta['schema_name'], str(id)+'.hs')
 
 
-def merge_files(id, meta, metrics, data_dir, output_dir):
+def merge_files(meta, metrics, data_dir, output_file):
     contents = []
     for m in metrics:
         filename = metric_to_filepath(m, data_dir)
         with open(filename) as f:
             contents.append(f.read())
-    output_file = gen_output_file(id, meta, output_dir)
     mkdir_p(os.path.dirname(output_file))
     needed_metrics = meta['metrics_max_num'] - len(metrics)
     now = int(time.time())
@@ -137,7 +138,13 @@ def metric_to_filepath(metric, data_dir):
 
 def worker(queue):
     for (id, meta, metrics, data_dir, output_dir) in iter(queue.get, 'STOP'):
-        merge_files(id, meta, metrics, data_dir, output_dir)
+        output_file = gen_output_file(id, meta, output_dir)
+        try:
+            merge_files(meta, metrics, data_dir, output_file)
+        except Exception as e:
+            print >>sys.stderr, '[merge error] %s: metrics[0]=%s' % (e, metrics[0])
+            if os.path.exists(output_file):
+                os.remove(output_file)
     return True
 
 
@@ -164,56 +171,121 @@ def get_instance(metric, instances):
     return string.lowercase[idx]
 
 
+def parse_rurouni_config(conf):
+    """ Return rurouni instance.
+    {instance: {"local_data_dir": "", "local_link_dir": ""}}
+    """
+    parser = ConfigParser()
+    parser.read(conf)
+    cache_sections = [x for x in parser.sections() if x.startswith('cache')]
+    keys = {'local_data_dir', 'local_link_dir'}
+    rs = {}
+    for section in cache_sections:
+        parts = section.split(':')
+        val = dict((k, v) for (k, v) in parser.items('cache') if k in keys)
+        if len(parts) == 1:
+            instance = 'a'
+            val_2 = {}
+        else:
+            instance = parts[1]
+            val_2 = dict((k, v) for (k, v) in parser.items(section) if k in keys)
+        val.update(val_2)
+        rs[instance] = val
+    return rs
+
+
+def skip_metric(metric, metric_data_path, kenshin_schema, whisper_schema):
+    blacklist = {'stats-counters-count',}
+    flag = False
+    key_info = '(%s, %s, %s)' % (metric, kenshin_schema.name,
+                             whisper_schema.name)
+    reason_pat = '[schema error] %s: ' + key_info
+    if kenshin_schema.name in blacklist:
+        flag = True
+        reason = reason_pat % 'schema name in blacklist'
+    elif not os.path.exists(metric_data_path):
+        flag = True
+        reason = reason_pat % 'data file not exists'
+    elif kenshin_schema.aggregationMethod != whisper_schema.aggregationMethod:
+        flag = True
+        reason = reason_pat % 'aggregation method not match'
+    elif len(kenshin_schema.archives) != len(whisper_schema.archives):
+        flag = True
+        reason = reason_pat % "archives length not match"
+    else:
+        for i in range(len(kenshin_schema.archives)):
+            if kenshin_schema.archives[i] != whisper_schema.archives[i]:
+                flag = True
+                reason = reason_pat % ("archive(%d) not match %s %s" % (i, kenshin_schema.archives[i], whisper_schema.archives[i]))
+                break
+    if flag:
+        print >>sys.stderr, reason
+    return flag
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", required=True, help="rurouni config file.")
-    parser.add_argument("-o", "--output_dir", required=True, help="output directory.")
+    parser.add_argument("--kenshin_conf_dir", required=True, help="kenshin conf directory.")
+    parser.add_argument("--whisper_conf_dir", required=True, help="whisper conf directory.")
     parser.add_argument("-d", "--data_dir", required=True, help="whisper file data directory.")
     parser.add_argument("-m", "--metrics_file", required=True, help="metrics that we needed.")
-    parser.add_argument("-n", "--instances", type=int, default=2, help="number of instances.")
     parser.add_argument("-p", "--processes", type=int, default=10, help="number of processes.")
     args = parser.parse_args()
 
+    rurouni_conf = os.path.join(args.kenshin_conf_dir, 'rurouni.conf')
+    instances_info =  parse_rurouni_config(rurouni_conf)
+
+    kenshin_storage_conf = os.path.join(args.kenshin_conf_dir, 'storage-schemas.conf')
+
     new_metrics_schemas = {}  # {(instance, schema_name): [id, meta, [metric, ...], index_fh]}
-    storage_schemas = loadStorageSchemas(args.config)
-    blacklist = {'stats-counters-count',}
+    kenshin_storage_schemas = loadStorageSchemas(kenshin_storage_conf)
+    get_whisper_schema = gen_whisper_schema_func(args.whisper_conf_dir)
 
     queue = Queue()
-
     with open(args.metrics_file) as f:
         for line in f:
             metric = line.strip()
-            schema = get_schema(storage_schemas, metric)
-            if schema.name in blacklist:
-                continue
-            instance = get_instance(metric, args.instances)
+            schema = get_schema(kenshin_storage_schemas, metric)
+            whisper_schema = get_whisper_schema(metric)
+            metric_data_path = metric_to_filepath(metric, args.data_dir)
 
+            if skip_metric(metric, metric_data_path, schema, whisper_schema):
+                continue
+
+            instance = get_instance(metric, len(instances_info))
+            output_dir = instances_info[instance]['local_data_dir']
             key = (instance, schema.name)
+            # value is: [ID, META, METRICS, INDEX_FH]
             new_metrics_schemas.setdefault(key, [0, None, [], None])
+
+            # set meta
             if not new_metrics_schemas[key][META]:
-                meta = read_header(metric_to_filepath(metric, args.data_dir))
+                meta = read_header(metric_data_path)
                 meta["instance"] = instance
                 meta["metrics_max_num"] = schema.metrics_max_num
+                meta["schema_name"] = schema.name
                 new_metrics_schemas[key][META] = meta
 
+            # set index file handler
             if not new_metrics_schemas[key][INDEX_FH]:
-                index_file = os.path.join(args.output_dir, instance + '.idx')
+                index_file = os.path.join(output_dir, instance + '.idx')
                 new_metrics_schemas[key][INDEX_FH] = open(index_file, "w")
+
             new_metrics_schemas[key][METRICS].append(metric)
 
+            # add a group of metrics to the queue
             if len(new_metrics_schemas[key][METRICS]) == schema.metrics_max_num:
                 val = new_metrics_schemas[key]
-                item = get_queue_item(val, args.data_dir, args.output_dir)
+                item = get_queue_item(val, args.data_dir, output_dir)
                 queue.put(item)
                 write_to_index(val)
-
-                new_metrics_schemas[key][META] = []
+                new_metrics_schemas[key][METRICS] = []
                 new_metrics_schemas[key][ID] += 1
 
         for key, val in new_metrics_schemas.items():
             if len(val[METRICS]):
-                item = get_queue_item(val, args.data_dir, args.output_dir)
+                item = get_queue_item(val, args.data_dir, output_dir)
                 queue.put(item)
                 write_to_index(val)
 
