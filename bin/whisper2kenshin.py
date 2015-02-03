@@ -243,6 +243,13 @@ def main():
     get_whisper_schema = gen_whisper_schema_func(args.whisper_conf_dir)
 
     queue = Queue()
+
+    processes = []
+    for w in xrange(args.processes):
+        p = Process(target=worker, args=(queue,))
+        p.start()
+        processes.append(p)
+
     with open(args.metrics_file) as f:
         for line in f:
             metric = line.strip()
@@ -289,11 +296,7 @@ def main():
                 queue.put(item)
                 write_to_index(val)
 
-    processes = []
-    for w in xrange(args.processes):
-        p = Process(target=worker, args=(queue,))
-        p.start()
-        processes.append(p)
+    for _ in xrange(args.processes):
         queue.put("STOP")
 
     for p in processes:
