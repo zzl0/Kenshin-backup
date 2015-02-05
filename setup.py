@@ -14,7 +14,7 @@ config = {
     'version': '0.1',
     'install_requires': [],
     'test_require': ['nose'],
-    'packages': ['kenshin', 'kenshin.tools', 'rurouni'],
+    'packages': ['kenshin', 'kenshin.tools', 'rurouni', 'rurouni.state', 'twisted.plugins'],
     'scripts': [],
     'name': 'kenshin'
 }

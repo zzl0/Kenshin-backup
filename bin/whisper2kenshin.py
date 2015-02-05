@@ -237,6 +237,15 @@ def skip_metric(metric, metric_data_path, kenshin_schema, whisper_schema):
     return flag
 
 
+def gen_index_file_handlers(instances_info):
+    rs = {}
+    for instance in instances_info:
+        data_dir = instances_info[instance]['local_data_dir']
+        index_file = os.path.join(data_dir, instance + '.idx')
+        rs[instance] = open(index_file, 'w')
+    return rs
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -249,13 +258,13 @@ def main():
 
     rurouni_conf = os.path.join(args.kenshin_conf_dir, 'rurouni.conf')
     instances_info =  parse_rurouni_config(rurouni_conf)
+    index_file_handlers = gen_index_file_handlers(instances_info)
 
     kenshin_storage_conf = os.path.join(args.kenshin_conf_dir, 'storage-schemas.conf')
-
-    new_metrics_schemas = {}  # {(instance, schema_name): [id, meta, [metric, ...], index_fh]}
     kenshin_storage_schemas = loadStorageSchemas(kenshin_storage_conf)
     get_whisper_schema = gen_whisper_schema_func(args.whisper_conf_dir)
 
+    new_metrics_schemas = {}  # {(instance, schema_name): [id, meta, [metric, ...], index_fh]}
     queue = Queue()
 
     processes = []
@@ -292,8 +301,7 @@ def main():
 
             # set index file handler
             if not new_metrics_schemas[key][INDEX_FH]:
-                index_file = os.path.join(output_dir, instance + '.idx')
-                new_metrics_schemas[key][INDEX_FH] = open(index_file, "w")
+                new_metrics_schemas[key][INDEX_FH] = index_file_handlers[instance]
 
             new_metrics_schemas[key][METRICS].append(metric)
 
@@ -320,8 +328,8 @@ def main():
     for p in processes:
         p.join()
 
-    for key in new_metrics_schemas:
-        new_metrics_schemas[key][INDEX_FH].close()
+    for _, fh in index_file_handlers.items():
+        fh.close()
 
 
 if __name__ == '__main__':
