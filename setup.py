@@ -5,18 +5,19 @@ try:
 except ImportError:
     from distutils.core import setup
 
-config = {
-    'description': 'A scalable time series database.',
-    'author': 'Zhaolong Zhu',
-    'url': 'http://code.dapps.douban.com/Kenshin',
-    'download_url': 'http://code.dapps.douban.com/Kenshin.git',
-    'author_email': 'zhuzhaolong0@gmail.com',
-    'version': '0.1',
-    'install_requires': [],
-    'test_require': ['nose'],
-    'packages': ['kenshin', 'kenshin.tools', 'rurouni', 'rurouni.state', 'twisted.plugins'],
-    'scripts': [],
-    'name': 'kenshin'
-}
+from glob import glob
 
-setup(**config)
+
+setup(
+    name='kenshin',
+    version='0.1.0',
+    description='A scalable time series database.',
+    author='Zhaolong Zhu',
+    url='http://code.dapps.douban.com/Kenshin',
+    download_url='http://code.dapps.douban.com/Kenshin.git',
+    author_email='zhuzhaolong0@gmail.com',
+    install_requires=[],
+    test_require=['nose'],
+    packages=['kenshin', 'kenshin.tools', 'rurouni', 'rurouni.state', 'twisted.plugins'],
+    scripts=glob('bin/*'),
+)
