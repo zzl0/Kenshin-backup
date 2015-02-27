@@ -358,9 +358,10 @@ class Storage(object):
                         fh_tmp.write(bytes)
                 os.rename(tmpfile, path)
 
-    def update(self, path, points, now=None):
+    def update(self, path, points, now=None, mtime=None):
         # order points by timestamp, newest first
         points.sort(key=operator.itemgetter(0), reverse=True)
+        mtime = mtime or int(os.stat(path).st_mtime)
         with open(path, 'r+b') as f:
             header = self.header(f)
             if now is None:
@@ -392,9 +393,9 @@ class Storage(object):
                 curr_points.append(point)
 
             if curr_archive and curr_points:
-                self._update_archive(f, header, curr_archive, curr_points, i)
+                self._update_archive(f, header, curr_archive, curr_points, i, mtime)
 
-    def _update_archive(self, fh, header, archive, points, archive_idx):
+    def _update_archive(self, fh, header, archive, points, archive_idx, mtime=None):
         time_step = archive['sec_per_point']
         aligned_points = [(p[0] - (p[0] % time_step), p[1])
                           for p in points if p]
@@ -435,7 +436,12 @@ class Storage(object):
         archive_list = header['archive_list']
         next_archive_idx = archive_idx + 1
         if next_archive_idx < len(archive_list):
-            timestamp_range = aligned_points[0][0], aligned_points[-1][0]
+            if mtime:
+                time_start = min(mtime, aligned_points[0][0])
+            else:
+                time_start = aligned_points[0][0]
+            time_end = aligned_points[-1][0]
+            timestamp_range = (time_start, time_end)
             self._propagate(fh, header, archive, archive_list[next_archive_idx],
                             timestamp_range, next_archive_idx)
 
@@ -529,27 +535,45 @@ class Storage(object):
         lower_points = [None] * point_cnt
 
         unpacked_series = unpacked_series[::-1]
+        ts = lower_interval_end
         for i in xrange(0, len(unpacked_series), step):
             higher_points = unpacked_series[i: i+step]
-            agg_point = self._get_agg_point(higher_points, tag_cnt, header['agg_id'])
-            lower_points[i/step] = agg_point
+            ts -= higher['sec_per_point'] * agg_cnt
+            agg_value = self._get_agg_value(higher_points, tag_cnt, header['agg_id'],
+                                            lower_interval_start, lower_interval_end)
+            lower_points[i/step] = (ts, agg_value)
 
         lower_points = [x for x in lower_points if x and x[0]]  # filter zero item
         self._update_archive(fh, header, lower, lower_points, lower_idx)
 
-    def _get_agg_point(self, higher_points, tag_cnt, agg_id):
+    def _get_agg_value(self, higher_points, tag_cnt, agg_id, ts_start, ts_end):
         higher_points = higher_points[::-1]
         agg_func = Agg.get_agg_func(agg_id)
         step = tag_cnt + 1
-        points = np.array([higher_points[i: i+step]
-                           for i in xrange(0, len(higher_points), step)])
-        points = points.transpose()
-        ts = int(points[0][-1])
-        val = [agg_func(self.filter_points(x)) for x in points[1:]]
-        return ts, val
+
+        """
+        points format:
+        t1 v11 v12
+        t2 v21 v22
+        t3 v31 v32
+        """
+        points = [higher_points[i: i+step]
+                  for i in xrange(0, len(higher_points), step)]
+        valid_points = self.filter_points_by_time(points, ts_start, ts_end)
+        if not valid_points:
+            val = [NULL_VALUE] * tag_cnt
+        else:
+            points = np.array(valid_points)
+            points = points.transpose()
+            val = [agg_func(self.filter_values(x)) for x in points[1:]]
+        return val
 
     @staticmethod
-    def filter_points(points):
+    def filter_points_by_time(points, ts_start, ts_end):
+        return [p for p in points if ts_start <= p[0] <= ts_end]
+
+    @staticmethod
+    def filter_values(points):
         rs = [p for p in points if not is_null_value(p)]
         return rs if rs else [NULL_VALUE]
 

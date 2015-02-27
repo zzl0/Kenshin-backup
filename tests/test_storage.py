@@ -11,7 +11,7 @@ from kenshin.utils import mkdir_p, roundup
 from kenshin.consts import NULL_VALUE
 
 
-class TestStorage(unittest.TestCase):
+class TestStorageBase(unittest.TestCase):
     data_dir = '/tmp/kenshin'
 
     def setUp(self):
@@ -28,6 +28,13 @@ class TestStorage(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.data_dir)
+
+    @staticmethod
+    def _gen_val(i):
+        return (i, 10+i)
+
+
+class TestStorage(TestStorageBase):
 
     def _basic_setup(self):
         metric_name = 'sys.cpu.user'
@@ -76,9 +83,6 @@ class TestStorage(unittest.TestCase):
         vals = [tuple(map(float, v)) for _, v in sorted(points)]
         expected = (time_info, vals)
         self.assertEqual(series[1:], expected)
-
-    def _gen_val(self, i):
-        return (i, 10+i)
 
     def test_update_propagate(self):
         now_ts = 1411628779
@@ -133,3 +137,44 @@ class TestStorage(unittest.TestCase):
                 series_format = point_format[0] + point_format[1:] * archive['count']
                 unpacked_series = struct.unpack(series_format, series_str)
                 print unpacked_series
+
+
+class TestLostPoint(TestStorageBase):
+
+    def _basic_setup(self):
+        metric_name = 'sys.cpu.user'
+
+        tag_list = [
+            'host=webserver01,cpu=0',
+            'host=webserver01,cpu=1',
+        ]
+        archive_list = [
+            (1, 60),
+            (3, 60),
+        ]
+        x_files_factor = 5
+        agg_name = 'min'
+        return [metric_name, tag_list, archive_list, x_files_factor, agg_name]
+
+
+    def test_update_propagate(self):
+        now_ts = 1411628779
+        point_seeds_list = [range(30, 45), range(15)]
+        # point_seeds_list = [range(60)]
+        mtime = None
+        for i, point_seeds in enumerate(point_seeds_list):
+            if i != 0:
+                mtime = now_ts - max(point_seeds_list[i - 1])
+            points = [(now_ts - i, self._gen_val(i)) for i in point_seeds]
+            self.storage.update(self.path, points, now_ts, mtime)
+
+        from_ts = now_ts - 60 - 1
+        series = self.storage.fetch(self.path, from_ts, now=now_ts)
+        time_info = (from_ts, roundup(now_ts, 3), 3)
+        values = [None, None, None, None, None, (44.0, 54.0), (41.0, 51.0),
+                  (38.0, 48.0), (35.0, 45.0), (32.0, 42.0), (30.0, 40.0),
+                  None, None, None, None, (14.0, 24.0), (11.0, 21.0), (8.0, 18.0),
+                  (5.0, 15.0), None, None]
+        expected = time_info, values
+        self.assertEqual(series[1:], expected)
+
