@@ -2,11 +2,11 @@
 # coding: utf-8
 import os
 import sys
-import re
 import time
 import optparse
 import signal
 import kenshin
+from kenshin.utils import get_metric
 
 
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
@@ -29,14 +29,7 @@ def main():
         sys.exit(1)
 
     path = args[0]
-    abspath = os.path.abspath(path)
-    realpath = os.path.realpath(path)
-    if abspath != realpath:
-        metric = re.split('/link/[a-z]/', abspath)[1]
-        metric = metric[:-3]  # remove .hs
-        metric = metric.replace('/', '.')
-    else:
-        metric = None
+    metric = get_metric(path)
     from_time = int(options._from)
     until_time = int(options.until)
 
