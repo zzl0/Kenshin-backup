@@ -178,3 +178,15 @@ class TestLostPoint(TestStorageBase):
         expected = time_info, values
         self.assertEqual(series[1:], expected)
 
+    def test_basic_update(self):
+        now_ts = 1411628779
+        point_seeds = [1, 2, 4, 5]
+        points = [(now_ts - i, self._gen_val(i)) for i in point_seeds]
+        self.storage.update(self.path, points, now_ts)
+
+        from_ts = now_ts - 5
+        series = self.storage.fetch(self.path, from_ts, now=now_ts)
+        time_info = (from_ts, now_ts, 1)
+        vals = [(5.0, 15.0), (4.0, 14.0), None, (2.0, 12.0), (1.0, 11.0)]
+        expected = time_info, vals
+        self.assertEqual(series[1:], expected)
