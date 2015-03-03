@@ -7,6 +7,19 @@ import errno
 from consts import NULL_VALUE
 
 
+def get_metric(path):
+    import re
+    abspath = os.path.abspath(path)
+    realpath = os.path.realpath(path)
+    if abspath != realpath:
+        metric = re.split('/link/[a-z]/', abspath)[1]
+        metric = metric[:-3]  # remove .hs
+        metric = metric.replace('/', '.')
+    else:
+        metric = None
+    return metric
+
+
 def mkdir_p(path):
     try:
         os.makedirs(path)

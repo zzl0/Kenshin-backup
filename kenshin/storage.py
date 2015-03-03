@@ -24,7 +24,7 @@ import inspect
 
 from agg import Agg
 from utils import mkdir_p, roundup, is_null_value
-from consts import DEFAULT_TAG_LENGTH, NULL_VALUE
+from consts import DEFAULT_TAG_LENGTH, NULL_VALUE, CHUNK_SIZE
 
 
 LONG_FORMAT = "!L"
@@ -39,6 +39,8 @@ METADATA_SIZE = struct.calcsize(METADATA_FORMAT)
 ARCHIVEINFO_FORMAT = "!3L"
 ARCHIVEINFO_SIZE = struct.calcsize(ARCHIVEINFO_FORMAT)
 
+# reserved tag index for reserved space,
+# this is usefull when adding a tag to a file.
 RESERVED_INDEX = -1
 
 
@@ -85,7 +87,8 @@ def enable_debug(ignore_header=False):
         def write(self, data):
             caller = self.get_caller()
             open.write_cnt += 1
-            debug("Write %d bytes #%d in %s" % (len(data), self.write_cnt, caller))
+            debug("Write %d bytes #%d in %s" % (len(data),
+                                                self.write_cnt, caller))
             return file.write(self, data)
 
         def read(self, bytes):
@@ -174,7 +177,8 @@ class Storage(object):
         else:
             mkdir_p(os.path.dirname(path))
 
-        # inter_tag_list[RESERVED_INDEX] is reserved space, to avoid move data points.
+        # inter_tag_list[RESERVED_INDEX] is reserved space
+        # to avoid move data points.
         inter_tag_list = tag_list + ['N' * DEFAULT_TAG_LENGTH * len(tag_list)]
 
         with open(path, 'wb') as f:
@@ -184,11 +188,10 @@ class Storage(object):
 
             # init data
             remaining = end_offset - f.tell()
-            chunk_size = 16384
-            zeroes = '\x00' * chunk_size
-            while remaining > chunk_size:
+            zeroes = '\x00' * CHUNK_SIZE
+            while remaining > CHUNK_SIZE:
                 f.write(zeroes)
-                remaining -= chunk_size
+                remaining -= CHUNK_SIZE
             f.write(zeroes[:remaining])
 
     @staticmethod
@@ -349,10 +352,9 @@ class Storage(object):
                 tmpfile = path + '.tmp'
                 with open(tmpfile, 'wb') as fh_tmp:
                     fh_tmp.write(packed_header)
-                    chunk_size = 16384
                     fh.seek(header_info['archive_list'][0]['offset'])
                     while True:
-                        bytes = fh.read(chunk_size)
+                        bytes = fh.read(CHUNK_SIZE)
                         if not bytes:
                             break
                         fh_tmp.write(bytes)
@@ -396,21 +398,36 @@ class Storage(object):
                 self._update_archive(f, header, curr_archive, curr_points, i, mtime)
 
     def _update_archive(self, fh, header, archive, points, archive_idx, mtime=None):
-        time_step = archive['sec_per_point']
-        aligned_points = [(p[0] - (p[0] % time_step), p[1])
-                          for p in points if p]
+        step = archive['sec_per_point']
+        aligned_points = sorted((p[0] - (p[0] % step), p[1])
+                                for p in points if p)
         if not aligned_points:
             return
 
-        # take the last val of duplicates
-        aligned_points = sorted(dict(aligned_points).items(),
-                                key=operator.itemgetter(0))
-
-        # create packed string
+        # create a packed string for each contiguous sequence of points
         point_format = header['point_format']
-        point_size = header['point_size']
-        packed_str = ''.join(struct.pack(point_format, ts, *val)
-                             for ts, val in aligned_points)
+        packed_strings = []
+        curr_strings = []
+        previous_ts = None
+        len_aligned_points = len(aligned_points)
+        for i in xrange(0, len_aligned_points):
+            # take last val of duplicates
+            if (i+1 < len_aligned_points and
+                aligned_points[i][0] == aligned_points[i+1][0]):
+                continue
+            (ts, val) = aligned_points[i]
+            packed_str = struct.pack(point_format, ts, *val)
+            if (not previous_ts) or (ts == previous_ts + step):
+                curr_strings.append(packed_str)
+            else:
+                start_ts = previous_ts - (step * (len(curr_strings) - 1))
+                packed_strings.append((start_ts, ''.join(curr_strings)))
+                curr_strings = [packed_str]
+            previous_ts = ts
+
+        if curr_strings:
+            start_ts = previous_ts - (step * (len(curr_strings) - 1))
+            packed_strings.append((start_ts, ''.join(curr_strings)))
 
         # read base point and determine where our writes will start
         base_point = self._read_base_point(fh, archive, header)
@@ -421,26 +438,30 @@ class Storage(object):
             # this file's first update, so set it to first timestamp
             base_ts = first_ts
 
-        offset = self._timestamp2offset(first_ts, base_ts, header, archive)
+        # write all of our packed strings in locations
+        # determined by base_ts
         archive_end = archive['offset'] + archive['size']
-        bytes_beyond = (offset + len(packed_str)) - archive_end
+        for (ts, packed_str) in packed_strings:
+            offset = self._timestamp2offset(ts, base_ts, header, archive)
+            bytes_beyond = (offset + len(packed_str)) - archive_end
+            fh.seek(offset)
+            if bytes_beyond > 0:
+                fh.write(packed_str[:-bytes_beyond])
+                fh.seek(archive['offset'])
+                fh.write(packed_str[-bytes_beyond:])
+            else:
+                fh.write(packed_str)
 
-        fh.seek(offset)
-        if bytes_beyond > 0:
-            fh.write(packed_str[:-bytes_beyond])
-            fh.seek(archive['offset'])
-            fh.write(packed_str[-bytes_beyond:])
-        else:
-            fh.write(packed_str)
-
+        # now we propagate the updates to lower-precision archives
         archive_list = header['archive_list']
         next_archive_idx = archive_idx + 1
         if next_archive_idx < len(archive_list):
+            time_end = aligned_points[-1][0]
             if mtime:
-                time_start = min(mtime, aligned_points[0][0])
+                time_start = max(min(mtime, aligned_points[0][0]),
+                                 time_end - archive['retention'])
             else:
                 time_start = aligned_points[0][0]
-            time_end = aligned_points[-1][0]
             timestamp_range = (time_start, time_end)
             self._propagate(fh, header, archive, archive_list[next_archive_idx],
                             timestamp_range, next_archive_idx)
@@ -644,14 +665,13 @@ class Storage(object):
         tag_cnt = len(header['tag_list'])
         val_list = [None] * cnt
         step = tag_cnt + 1
-        curr_interval = from_time
         sec_per_point = archive['sec_per_point']
         for i in xrange(0, len(unpacked_series), step):
             point_ts = unpacked_series[i]
-            if point_ts == curr_interval:
+            if from_time <= point_ts < until_time:
                 val = unpacked_series[i+1: i+step]
-                val_list[i/step] = self._conver_null_value(val)
-            curr_interval += sec_per_point
+                idx = (point_ts - from_time) / sec_per_point
+                val_list[idx] = self._conver_null_value(val)
 
         time_info = (from_time, until_time, sec_per_point)
         return header, time_info, val_list
