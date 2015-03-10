@@ -3,10 +3,13 @@ from twisted.application import internet, service
 from twisted.application.internet import TCPServer
 from twisted.plugin import IPlugin
 from twisted.internet.protocol import ServerFactory
+from twisted.python.log import ILogObserver
+from twisted.python.components import Componentized
 
 from rurouni import protocols
-from rurouni import state, log
+from rurouni import state
 from rurouni.conf import settings
+from rurouni.log import rurouniLogObserver
 
 
 ### root serveice
@@ -17,8 +20,8 @@ class RurouniRootService(service.MultiService):
 
     def setServiceParent(self, parent):
         service.MultiService.setServiceParent(self, parent)
-
-        # TODO: configure logging.
+        if isinstance(parent, Componentized):
+            parent.setComponent(ILogObserver, rurouniLogObserver)
 
 
 def createBaseService(options):
