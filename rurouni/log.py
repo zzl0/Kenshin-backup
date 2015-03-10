@@ -23,7 +23,7 @@ class RurouniLogObserver(object):
         self.observer = self.logdirObserver
 
     def logToSyslog(self, prefix):
-        observer = SysLogObserver(prefix).emit
+        observer = SyslogObserver(prefix).emit
         def log(event):
             event['system'] = event.get('type', 'console')
             observer(event)

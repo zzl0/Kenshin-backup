@@ -39,7 +39,7 @@ setup(
     download_url='http://code.dapps.douban.com/Kenshin.git',
     author_email='zhuzhaolong0@gmail.com',
     install_requires=[],
-    test_require=['nose'],
+    tests_require=['nose'],
     packages=['kenshin', 'kenshin.tools', 'rurouni', 'rurouni.state', 'twisted.plugins'],
     scripts=glob('bin/*'),
 )
