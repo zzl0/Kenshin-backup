@@ -153,7 +153,8 @@ def worker(queue):
         output_file = gen_output_file(id, meta, output_dir)
         try:
             merge_files(meta, metrics, data_dir, output_file)
-            gen_links(metrics, output_file, link_dir, meta['instance'])
+            if link_dir:
+                gen_links(metrics, output_file, link_dir, meta['instance'])
         except Exception as e:
             print >>sys.stderr, '[merge error] %s: metrics[0]=%s' % (e, metrics[0])
             if os.path.exists(output_file):
@@ -255,6 +256,7 @@ def main():
     parser.add_argument("-d", "--data_dir", required=True, help="whisper file data directory.")
     parser.add_argument("-m", "--metrics_file", required=True, help="metrics that we needed.")
     parser.add_argument("-p", "--processes", type=int, default=10, help="number of processes.")
+    parser.add_argument("-l", "--link", action='store_true', help="generate links.")
     args = parser.parse_args()
 
     rurouni_conf = os.path.join(args.kenshin_conf_dir, 'rurouni.conf')
@@ -274,6 +276,7 @@ def main():
         p.start()
         processes.append(p)
 
+    link_dir = None
     with open(args.metrics_file) as f:
         for line in f:
             metric = line.strip()
@@ -286,7 +289,7 @@ def main():
 
             instance = get_instance(metric, len(instances_info))
             output_dir = instances_info[instance]['local_data_dir']
-            link_dir = instances_info[instance]['local_link_dir']
+            link_dir = instances_info[instance]['local_link_dir'] if args.link
             key = (instance, schema.name)
             # value is: [ID, META, METRICS, INDEX_FH]
             new_metrics_schemas.setdefault(key, [0, None, [], None])
@@ -317,7 +320,7 @@ def main():
 
         for (instance, _), val in new_metrics_schemas.items():
             output_dir = instances_info[instance]['local_data_dir']
-            link_dir = instances_info[instance]['local_link_dir']
+            link_dir = instances_info[instance]['local_link_dir'] if args.link
             if len(val[METRICS]):
                 item = get_queue_item(val, args.data_dir, output_dir, link_dir)
                 queue.put(item)
