@@ -21,12 +21,12 @@ def main():
         for fp in glob.glob(hs_file_pat):
             with open(fp) as f:
                 header = kenshin.header(f)
-                metric_list = header['tag_list'][:-1]
+                metric_list = header['tag_list']
                 file_id = splitext(basename(fp))[0]
                 for i, metric in enumerate(metric_list):
                     if metric != '':
-                        out.write('%s %s %s %s\n' %
-                                  (metric, schema_name, file_id, i))
+                        out.write('%s %s %s\n' %
+                                  (metric, file_id, i))
     out.close()
 
 
