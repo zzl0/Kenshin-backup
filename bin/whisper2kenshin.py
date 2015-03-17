@@ -6,6 +6,7 @@ import time
 import struct
 import string
 import fnv1a
+import urllib
 from multiprocessing import Process, Queue
 from ConfigParser import ConfigParser
 
@@ -13,7 +14,8 @@ from kenshin import storage
 from kenshin.consts import NULL_VALUE
 from kenshin.storage import Storage
 from kenshin.tools.whisper_tool import (read_header, metadataSize,
-    pointFormat, pointSize, get_agg_name, gen_whisper_schema_func)
+    pointFormat, pointSize, get_agg_name, gen_whisper_schema_func,
+    remote_url)
 from kenshin.tools.hash import Hash
 from kenshin.utils import mkdir_p
 from rurouni.storage import loadStorageSchemas
@@ -100,12 +102,22 @@ def gen_output_file(id, meta, output_dir):
                         meta['schema_name'], str(id)+'.hs')
 
 
-def merge_files(meta, metrics, data_dir, output_file):
-    contents = []
-    for m in metrics:
-        filename = metric_to_filepath(m, data_dir)
+def get_whisper_file_content(data_dir, m):
+    filepath = metric_to_filepath(m, data_dir)
+    if remote_url(filepath):
+        c = urllib.urlopen(filepath)
+        if c.code == 200:
+            return c.read()
+        else:
+            raise Exception('HTTP Error Code %s for metric %s' % (c.code, m))
+    else:
         with open(filename) as f:
-            contents.append(f.read())
+            return f.read()
+
+
+def merge_files(meta, metrics, data_dir, output_file):
+    contents = [get_whisper_file_content(data_dir, m)
+                for m in metrics]
     mkdir_p(os.path.dirname(output_file))
     needed_metrics = meta['metrics_max_num'] - len(metrics)
     now = int(time.time())
@@ -217,7 +229,7 @@ def skip_metric(metric, metric_data_path, kenshin_schema, whisper_schema):
     if kenshin_schema.name in blacklist:
         flag = True
         reason = reason_pat % 'schema name in blacklist'
-    elif not os.path.exists(metric_data_path):
+    elif not remote_url(metric_data_path) and not os.path.exists(metric_data_path):
         flag = True
         reason = reason_pat % 'data file not exists'
     elif kenshin_schema.aggregationMethod != whisper_schema.aggregationMethod:
@@ -253,7 +265,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--kenshin_conf_dir", required=True, help="kenshin conf directory.")
     parser.add_argument("--whisper_conf_dir", required=True, help="whisper conf directory.")
-    parser.add_argument("-d", "--data_dir", required=True, help="whisper file data directory.")
+    parser.add_argument("-d", "--data_dir", required=True, help="whisper file data directory(local or http address).")
     parser.add_argument("-m", "--metrics_file", required=True, help="metrics that we needed.")
     parser.add_argument("-p", "--processes", type=int, default=10, help="number of processes.")
     parser.add_argument("-l", "--link", action='store_true', help="generate links.")
@@ -289,7 +301,8 @@ def main():
 
             instance = get_instance(metric, len(instances_info))
             output_dir = instances_info[instance]['local_data_dir']
-            link_dir = instances_info[instance]['local_link_dir'] if args.link
+            if args.link:
+                link_dir = instances_info[instance]['local_link_dir']
             key = (instance, schema.name)
             # value is: [ID, META, METRICS, INDEX_FH]
             new_metrics_schemas.setdefault(key, [0, None, [], None])
@@ -320,7 +333,8 @@ def main():
 
         for (instance, _), val in new_metrics_schemas.items():
             output_dir = instances_info[instance]['local_data_dir']
-            link_dir = instances_info[instance]['local_link_dir'] if args.link
+            if args.link:
+                link_dir = instances_info[instance]['local_link_dir']
             if len(val[METRICS]):
                 item = get_queue_item(val, args.data_dir, output_dir, link_dir)
                 queue.put(item)

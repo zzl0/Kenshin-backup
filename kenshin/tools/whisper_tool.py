@@ -1,5 +1,6 @@
 # coding: utf-8
 import os
+import urllib
 import re
 import struct
 
@@ -33,39 +34,48 @@ def get_agg_name(agg_id):
     return agg_type_dict[agg_id]
 
 
+def remote_url(filepath):
+    return filepath.startswith('http://')
+
+
 def read_header(filename):
-    with open(filename) as fh:
-        packed_meta = fh.read(metadataSize)
+    if remote_url(filename):
+        fh = urllib.urlopen(filename)
+    else:
+        fh = open(filename)
+    packed_meta = fh.read(metadataSize)
+
+    try:
+        agg_type, max_ret, xff, archive_cnt = struct.unpack(
+            metadataFormat, packed_meta)
+    except:
+        raise Exception("Unable to read header", filename)
+
+    archives = []
+    for i in xrange(archive_cnt):
+        packed_archive_info = fh.read(archiveInfoSize)
         try:
-            agg_type, max_ret, xff, archive_cnt = struct.unpack(
-                metadataFormat, packed_meta)
+            off, sec, cnt = struct.unpack(archiveInfoFormat, packed_archive_info)
         except:
-            raise Exception("Unable to read header", filename)
+            raise Exception(
+                "Unable to read archive%d metadata" % i, filename)
 
-        archives = []
-        for i in xrange(archive_cnt):
-            packed_archive_info = fh.read(archiveInfoSize)
-            try:
-                off, sec, cnt = struct.unpack(archiveInfoFormat, packed_archive_info)
-            except:
-                raise Exception(
-                    "Unable to read archive%d metadata" % i, filename)
-
-            archive_info = {
-                'offset': off,
-                'sec_per_point': sec,
-                'count': cnt,
-                'size': pointSize * cnt,
-                'retention': sec * cnt,
-            }
-            archives.append(archive_info)
-
-        info = {
-            'xff': xff,
-            'archives': archives,
-            'agg_type': agg_type,
+        archive_info = {
+            'offset': off,
+            'sec_per_point': sec,
+            'count': cnt,
+            'size': pointSize * cnt,
+            'retention': sec * cnt,
         }
-        return info
+        archives.append(archive_info)
+
+    info = {
+        'xff': xff,
+        'archives': archives,
+        'agg_type': agg_type,
+    }
+    fh.close()
+    return info
 
 
 ### schema (copy from carbon with some small change)
