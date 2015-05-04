@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
-import os
 import sys
 import time
 import optparse
 import signal
 import kenshin
 from kenshin.utils import get_metric
-
 
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
@@ -18,10 +16,15 @@ def main():
 
     usage = "%prog [options] path"
     option_parser = optparse.OptionParser(usage=usage)
-    option_parser.add_option('--from', default=YESTERDAY, type=int,
-        dest='_from', help="begin timestamp(default: 24 hours ago)")
-    option_parser.add_option('--until', default=NOW, type=int,
-        help="end timestamp")
+    option_parser.add_option('--from',
+                             default=YESTERDAY,
+                             type=int,
+                             dest='_from',
+                             help="begin timestamp(default: 24 hours ago)")
+    option_parser.add_option('--until',
+                             default=NOW,
+                             type=int,
+                             help="end timestamp")
 
     (options, args) = option_parser.parse_args()
     if len(args) != 1:
