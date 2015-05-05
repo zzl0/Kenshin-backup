@@ -23,7 +23,7 @@ import operator
 import inspect
 
 from agg import Agg
-from utils import mkdir_p, roundup, is_null_value
+from utils import mkdir_p, roundup
 from consts import DEFAULT_TAG_LENGTH, NULL_VALUE, CHUNK_SIZE
 
 
@@ -49,8 +49,10 @@ RESERVED_INDEX = -1
 class KenshinException(Exception):
     pass
 
+
 class InvalidTime(KenshinException):
     pass
+
 
 class InvalidConfig(KenshinException):
     pass
@@ -595,7 +597,7 @@ class Storage(object):
 
     @staticmethod
     def filter_values(points):
-        rs = [p for p in points if not is_null_value(p)]
+        rs = [p for p in points if p != NULL_VALUE]
         return rs if rs else [NULL_VALUE]
 
     def fetch(self, path, from_time, until_time=None, now=None):
@@ -678,7 +680,7 @@ class Storage(object):
 
     @staticmethod
     def _conver_null_value(point_val):
-        val = [None if is_null_value(x) else x
+        val = [None if x == NULL_VALUE else x
                for x in point_val]
         if set(val) == {None}:
             return None
