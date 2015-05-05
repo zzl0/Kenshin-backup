@@ -14,6 +14,7 @@ DELAY = 60
 
 idx = 0
 
+
 def get_loadavg():
     cmd = 'uptime'
     output = subprocess.check_output(cmd, shell=True).strip()

@@ -86,9 +86,9 @@ class MetricCache(object):
         return [(ts, val[pos_idx]) for ts, val in data
                                    if not is_null_value(val[pos_idx])]
 
-    def pop(self, schema_name, file_idx):
+    def pop(self, schema_name, file_idx, end_ts=None, clear=True):
         file_cache = self.schema_caches[schema_name][file_idx]
-        datapoints = file_cache.get(clear=True)
+        datapoints = file_cache.get(end_ts=end_ts, clear=clear)
         log.debug('canWrite: %s' % file_cache.canWrite())
         return datapoints
 
@@ -98,6 +98,11 @@ class MetricCache(object):
                    for (schema_name, schema_cache) in self.schema_caches.items()
                    for file_idx in range(schema_cache.size())
                    if schema_cache[file_idx].canWrite()]
+
+    def getAllFileCaches(self):
+        return [(schema_name, file_idx)
+                for (schema_name, schema_cache) in self.schema_caches.iteritems()
+                for file_idx in range(schema_cache.size())]
 
 
 class SchemaCache(object):
@@ -213,8 +218,10 @@ class FileCache(object):
                 log.err('put error in FileCache: %s' % e)
 
     def get_offset(self, ts):
-        offset = self.start_offset + (ts - self.start_ts) / self.resolution
-        return offset % self.cache_size
+        interval = (ts - self.start_ts) / self.resolution
+        if interval >= self.cache_size:
+            interval = self.cache_size - 1
+        return (self.start_offset + interval) % self.cache_size
 
     def get(self, end_ts=None, clear=False):
         if self.metricEmpty():
@@ -226,8 +233,8 @@ class FileCache(object):
             else:
                 end_offset = (begin_offset + self.points_num) % self.cache_size
 
-            log.debug("begin_offset: %s, end_offset: %s" %
-                      (begin_offset, end_offset))
+            log.debug("begin_offset: %s, end_offset: %s end_ts: %s, clear: %s" %
+                      (begin_offset, end_offset, end_ts, clear,))
 
             rs = [None] * self.metrics_max_num
             if begin_offset < end_offset:

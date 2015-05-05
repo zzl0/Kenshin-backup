@@ -1,5 +1,4 @@
 # coding: utf-8
-import os
 import time
 
 from twisted.application.service import Service
@@ -10,7 +9,7 @@ from rurouni.cache import MetricCache
 from rurouni import log
 from rurouni.conf import settings
 from rurouni.state import instrumentation
-from rurouni.storage import getFilePath, getSchema
+from rurouni.storage import getFilePath
 
 
 class WriterService(Service):
@@ -23,13 +22,21 @@ class WriterService(Service):
         Service.startService(self)
 
     def stopService(self):
+        try:
+            file_cache_idxs = MetricCache.getAllFileCaches()
+            writeCachedDataPointsWhenStop(file_cache_idxs)
+        except Exception as e:
+            log.err('write error when stopping service: %s' % e)
         Service.stopService(self)
 
 
 def writeForever():
     while reactor.running:
+        write = False
         try:
-            write = writeCachedDataPoints()
+            file_cache_idxs = MetricCache.writableFileCaches()
+            if file_cache_idxs:
+                write = writeCachedDataPoints(file_cache_idxs)
         except Exception as e:
             log.err('write error: %s' % e)
             raise e
@@ -39,21 +46,17 @@ def writeForever():
             time.sleep(1)
 
 
-def writeCachedDataPoints():
-    file_cache_idxs = MetricCache.writableFileCaches()
-    if not file_cache_idxs:
-        return False
-
+def writeCachedDataPoints(file_cache_idxs):
+    pop_func = MetricCache.pop
     for schema_name, file_idx in file_cache_idxs:
-        datapoints = MetricCache.pop(schema_name, file_idx)
+        datapoints = pop_func(schema_name, file_idx)
         file_path = getFilePath(schema_name, file_idx)
 
         try:
             t1 = time.time()
             log.debug('filepath: %s, datapoints: %s' % (file_path, datapoints))
             kenshin.update(file_path, datapoints)
-            t2 = time.time()
-            update_time = t2 - t1
+            update_time = time.time() - t1
         except Exception as e:
             log.err('Error writing to %s: %s' % (file_path, e))
             instrumentation.incr('errors')
@@ -67,3 +70,15 @@ def writeCachedDataPoints():
                             (point_cnt, schema_name, update_time))
 
     return True
+
+
+def writeCachedDataPointsWhenStop(file_cache_idxs):
+    pop_func = MetricCache.pop
+    for schema_name, file_idx in file_cache_idxs:
+        datapoints = pop_func(schema_name, file_idx, int(time.time()), False)
+        file_path = getFilePath(schema_name, file_idx)
+
+        try:
+            kenshin.update(file_path, datapoints)
+        except Exception as e:
+            log.err('Error writing to %s: %s' % (file_path, e))

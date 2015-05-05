@@ -4,11 +4,11 @@ from storage import (
     Storage, KenshinException, InvalidConfig, InvalidTime,
     RetentionParser)
 
-__version__ = "0.1.1"
-__commit__ = "5380b3e"
+__version__ = "0.1.2"
+__commit__ = "7855e60"
 __author__ = "zhuzhaolong"
 __email__ = "zhuzhaolong0@gmail.com"
-__date__ = "Wed Mar 18 15:04:14 2015 +0800"
+__date__ = "Tue May 5 11:36:54 2015 +0800"
 
 
 _storage = Storage()
