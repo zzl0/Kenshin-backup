@@ -25,6 +25,8 @@ class TestStorageBase(unittest.TestCase):
 
         metric_name = self.basic_setup[0]
         self.path = self.storage.gen_path(self.data_dir, metric_name)
+        tag_list = self.basic_setup[1]
+        self.default_null = (None,) * len(tag_list)
 
     def tearDown(self):
         shutil.rmtree(self.data_dir)
@@ -93,7 +95,7 @@ class TestStorage(TestStorageBase):
         from_ts = now_ts - num_points - 1
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
         time_info = (from_ts, roundup(now_ts, 3), 3)
-        expected = time_info, [(5.0, 15.0), (2.0, 12.0), None]
+        expected = time_info, [(5.0, 15.0), (2.0, 12.0), self.default_null]
         self.assertEqual(series[1:], expected)
 
     def test_null_point(self):
@@ -109,7 +111,7 @@ class TestStorage(TestStorageBase):
         from_ts = now_ts - num_points - 1
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
         time_info = (from_ts, roundup(now_ts, 3), 3)
-        expected = time_info, [None, (2.0, 12.0), None]
+        expected = time_info, [self.default_null, (2.0, 12.0), self.default_null]
         self.assertEqual(series[1:], expected)
 
     def test_update_old_points(self):
@@ -121,7 +123,7 @@ class TestStorage(TestStorageBase):
         from_ts = now_ts - num_points - 1
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
         time_info = (from_ts, roundup(now_ts, 3), 3)
-        expected = time_info, [(12.0, 22.0), (10.0, 20.0), (7.0, 17.0), None, None]
+        expected = time_info, [(12.0, 22.0), (10.0, 20.0), (7.0, 17.0), self.default_null, self.default_null]
         self.assertEqual(series[1:], expected)
 
     def print_file_content(self):
@@ -156,7 +158,6 @@ class TestLostPoint(TestStorageBase):
         agg_name = 'min'
         return [metric_name, tag_list, archive_list, x_files_factor, agg_name]
 
-
     def test_update_propagate(self):
         now_ts = 1411628779
         point_seeds_list = [range(30, 45), range(15)]
@@ -171,10 +172,11 @@ class TestLostPoint(TestStorageBase):
         from_ts = now_ts - 60 - 1
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
         time_info = (from_ts, roundup(now_ts, 3), 3)
-        values = [None, None, None, None, None, (44.0, 54.0), (41.0, 51.0),
+        null = self.default_null
+        values = [null, null, null, null, null, (44.0, 54.0), (41.0, 51.0),
                   (38.0, 48.0), (35.0, 45.0), (32.0, 42.0), (30.0, 40.0),
-                  None, None, None, None, (14.0, 24.0), (11.0, 21.0), (8.0, 18.0),
-                  (5.0, 15.0), None, None]
+                  null, null, null, null, (14.0, 24.0), (11.0, 21.0), (8.0, 18.0),
+                  (5.0, 15.0), null, null]
         expected = time_info, values
         self.assertEqual(series[1:], expected)
 
@@ -187,6 +189,6 @@ class TestLostPoint(TestStorageBase):
         from_ts = now_ts - 5
         series = self.storage.fetch(self.path, from_ts, now=now_ts)
         time_info = (from_ts, now_ts, 1)
-        vals = [(5.0, 15.0), (4.0, 14.0), None, (2.0, 12.0), (1.0, 11.0)]
+        vals = [(5.0, 15.0), (4.0, 14.0), self.default_null, (2.0, 12.0), (1.0, 11.0)]
         expected = time_info, vals
         self.assertEqual(series[1:], expected)

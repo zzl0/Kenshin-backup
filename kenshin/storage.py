@@ -665,7 +665,7 @@ class Storage(object):
         ## construct value list
         # pre-allocate entire list or speed
         tag_cnt = len(header['tag_list'])
-        val_list = [None] * cnt
+        val_list = [(None,) * tag_cnt] * cnt
         step = tag_cnt + 1
         sec_per_point = archive['sec_per_point']
         for i in xrange(0, len(unpacked_series), step):
@@ -682,7 +682,4 @@ class Storage(object):
     def _conver_null_value(point_val):
         val = [None if x == NULL_VALUE else x
                for x in point_val]
-        if set(val) == {None}:
-            return None
-        else:
-            return tuple(val)
+        return tuple(val)
