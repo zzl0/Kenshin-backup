@@ -3,8 +3,6 @@
 import os
 import errno
 
-from consts import NULL_VALUE
-
 
 def get_metric(path):
     import re
@@ -42,10 +40,6 @@ def roundup(x, base):
     """
     t = x % base
     return (x - t + base) if t else x
-
-
-def is_null_value(val):
-    return val == NULL_VALUE
 
 
 if __name__ == '__main__':
