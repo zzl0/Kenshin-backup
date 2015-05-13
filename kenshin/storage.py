@@ -632,6 +632,8 @@ class Storage(object):
     def _archive_fetch(self, fh, header, archive, from_time, until_time):
         from_time = roundup(from_time, archive['sec_per_point'])
         until_time = roundup(until_time, archive['sec_per_point'])
+        tag_cnt = len(header['tag_list'])
+        null_point = (None,) * tag_cnt
 
         base_point = self._read_base_point(fh, archive, header)
         base_ts = base_point[0]
@@ -640,7 +642,7 @@ class Storage(object):
             step = archive['sec_per_point']
             cnt = (until_time - from_time) / step
             time_info = (from_time, until_time, step)
-            val_list = [None] * cnt
+            val_list = [null_point] * cnt
             return (header, time_info, val_list)
 
         from_offset = self._timestamp2offset(from_time, base_ts, header, archive)
@@ -664,8 +666,7 @@ class Storage(object):
 
         ## construct value list
         # pre-allocate entire list or speed
-        tag_cnt = len(header['tag_list'])
-        val_list = [(None,) * tag_cnt] * cnt
+        val_list = [null_point] * cnt
         step = tag_cnt + 1
         sec_per_point = archive['sec_per_point']
         for i in xrange(0, len(unpacked_series), step):
