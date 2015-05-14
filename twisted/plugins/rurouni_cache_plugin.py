@@ -1,7 +1,7 @@
 # coding: utf-8
 from zope.interface import implements
 
-from twisted.application.service import  IServiceMaker
+from twisted.application.service import IServiceMaker
 from twisted.plugin import IPlugin
 
 from rurouni import service

@@ -1,8 +1,8 @@
 # coding: utf-8
 import os
+import sys
 import errno
 from os.path import join, normpath, expanduser, dirname, exists, isdir
-from collections import OrderedDict
 from ConfigParser import ConfigParser
 from optparse import OptionParser
 from twisted.python import usage
@@ -32,6 +32,7 @@ defaults = dict(
     PID_DIR = None,
 )
 
+
 class Settings(dict):
     __getattr__ = dict.__getitem__
 
@@ -52,7 +53,7 @@ class Settings(dict):
             val_typ = type(defaults[key]) if key in defaults else str
 
             if val_typ is list:
-                val = [v.strip() for v in value.split(',')]
+                val = [v.strip() for v in val.split(',')]
             elif val_typ is bool:
                 val = parser.getboolean(section, key)
             else:
@@ -61,7 +62,7 @@ class Settings(dict):
                     val = int(val)
                 except:
                     try:
-                        value = float(value)
+                        val = float(val)
                     except:
                         pass
             self[key] = val
@@ -104,6 +105,10 @@ class RurouniOptions(usage.Options):
         if pidfile.endswith('twistd.pid'):
             pidfile = None
         self['pidfile'] = pidfile
+
+        # Enforce a default umask of '022' if none was set.
+        if not self.parent.has_key('umask') or self.parent['umask'] is None:
+            self.parent['umask'] = 022
 
         program = self.parent.subCommand
         settings['program'] = program
@@ -218,6 +223,9 @@ def get_parser(usage="%prog [options] <start|stop|status>"):
         "--pidfile", default=None,
         help='Write pid to the given file')
     parser.add_option(
+        "--umask", default=None,
+        help="Use the given umask when creating files")
+    parser.add_option(
         '--config', default=None,
         help="Use the given config file")
     parser.add_option(
@@ -275,8 +283,8 @@ def read_config(program, options):
         join(settings['LOG_DIR'], '%s-%s' % (program, instance))
     )
 
-    settings['METRICS_FILE'] =  join(settings['LOCAL_DATA_DIR'],
-                                     '%s.idx' % instance)
+    settings['METRICS_FILE'] = join(settings['LOCAL_DATA_DIR'],
+                                    '%s.idx' % instance)
     return settings
 
 
