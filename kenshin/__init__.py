@@ -5,7 +5,7 @@ from storage import (
     RetentionParser)
 
 __version__ = "0.1.3"
-__commit__ = "fae8dca"
+__commit__ = "709bd38"
 __author__ = "zhuzhaolong"
 __email__ = "zhuzhaolong0@gmail.com"
 __date__ = "Thu May 14 14:18:59 2015 +0800"
