@@ -1,7 +1,6 @@
 # coding: utf-8
 import os
-import sys
-from os.path import dirname, basename, join, abspath, splitext
+from os.path import dirname, basename, abspath, splitext
 
 
 def run_twistd_plugin(filename):
@@ -32,6 +31,8 @@ def run_twistd_plugin(filename):
         twistd_options.append('--nodaemon')
     if options.pidfile:
         twistd_options.extend(['--pidfile', options.pidfile])
+    if options.umask:
+        twistd_options.extend(['--umask', options.umask])
 
     twistd_options.append(program)
 
@@ -39,7 +40,7 @@ def run_twistd_plugin(filename):
         twistd_options.append('--debug')
     for name, value in vars(options).items():
         if (value is not None and
-          name not in ('debug', 'nodaemon')):
+                name not in ('debug', 'nodaemon', 'pidfile', 'umask')):
             twistd_options.extend(["--%s" % name.replace("_", '-'),
                                   value])
 

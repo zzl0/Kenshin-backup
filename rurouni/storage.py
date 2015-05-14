@@ -37,7 +37,7 @@ class Archive:
         self.points = points
 
     def __str__(self):
-        return 'Archive(%s, %s)' % (secPerPoint, points)
+        return 'Archive(%s, %s)' % (self.secPerPoint, self.points)
 
     def getTuple(self):
         return self.secPerPoint, self.points
@@ -141,4 +141,3 @@ def getSchema(metric):
 
 if __name__ == '__main__':
     loadStorageSchemas()
-
