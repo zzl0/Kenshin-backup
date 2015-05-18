@@ -1,13 +1,10 @@
 # coding: utf-8
 import os
 import shutil
-import struct
 import unittest
 
 import kenshin.storage
-from kenshin.storage import (
-    Storage, METADATA_SIZE, METADATA_FORMAT, POINT_FORMAT, enable_debug,
-    RetentionParser)
+from kenshin.storage import Storage, enable_debug, RetentionParser
 from kenshin.utils import mkdir_p
 
 
