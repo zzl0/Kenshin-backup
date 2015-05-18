@@ -181,7 +181,8 @@ class Storage(object):
 
         # inter_tag_list[RESERVED_INDEX] is reserved space
         # to avoid move data points.
-        inter_tag_list = tag_list + ['N' * DEFAULT_TAG_LENGTH * len(tag_list)]
+        empty_tag_cnt = sum(1 for t in tag_list if not t)
+        inter_tag_list = tag_list + ['N' * DEFAULT_TAG_LENGTH * empty_tag_cnt]
 
         with open(path, 'wb') as f:
             packed_header, end_offset = self.pack_header(
@@ -332,7 +333,6 @@ class Storage(object):
         with open(path, 'r+b') as fh:
             header_info = Storage.header(fh)
             tag_list = header_info['tag_list']
-            tag_cnt = len(tag_list)
             reserved_size = header_info['reserved_size']
 
             archive_list = [(a['sec_per_point'], a['count'])

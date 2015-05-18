@@ -4,8 +4,7 @@ import shutil
 import struct
 import unittest
 
-from kenshin.storage import (
-    Storage, METADATA_SIZE, METADATA_FORMAT, POINT_FORMAT)
+from kenshin.storage import Storage
 from kenshin.agg import Agg
 from kenshin.utils import mkdir_p, roundup
 from kenshin.consts import NULL_VALUE
