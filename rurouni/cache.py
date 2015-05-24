@@ -88,15 +88,15 @@ class MetricCache(object):
     def pop(self, schema_name, file_idx, end_ts=None, clear=True):
         file_cache = self.schema_caches[schema_name][file_idx]
         datapoints = file_cache.get(end_ts=end_ts, clear=clear)
-        log.debug('canWrite: %s' % file_cache.canWrite())
         return datapoints
 
     def writableFileCaches(self):
+        now = int(time.time())
         with self.lock:
             return[(schema_name, file_idx)
                    for (schema_name, schema_cache) in self.schema_caches.items()
                    for file_idx in range(schema_cache.size())
-                   if schema_cache[file_idx].canWrite()]
+                   if schema_cache[file_idx].canWrite(now)]
 
     def getAllFileCaches(self):
         return [(schema_name, file_idx)
@@ -155,8 +155,8 @@ class FileCache(object):
         self.base_idxs = [i * self.cache_size for i in xrange(self.metrics_max_num)]
 
         self.start_ts = None
+        self.max_ts = 0
         self.start_offset = 0
-        self.can_write = False
 
     def add(self, file_pos):
         with self.lock:
@@ -180,18 +180,10 @@ class FileCache(object):
         with self.lock:
             return not self.start_ts
 
-    def canWrite(self):
+    def canWrite(self, now):
         with self.lock:
-            return self.can_write
-
-    def setWrite(self, timestamp):
-        """
-        Check write condition, if this cache can write to file,
-        then set canWrite flag.
-        """
-        if not self.can_write and \
-           (timestamp - self.start_ts - self.retention >= settings.DEFAULT_WAIT_TIME):
-            self.can_write = True
+            return self.start_ts and ((now - self.start_ts - self.retention) >=
+                                      settings.DEFAULT_WAIT_TIME)
 
     def put(self, pos_idx, datapoint):
         log.debug("retention: %s, cache_size: %s, points_num: %s" %
@@ -201,17 +193,16 @@ class FileCache(object):
                 base_idx = self.base_idxs[pos_idx]
                 ts, val = datapoint
 
+                self.max_ts = max(self.max_ts, ts)
                 if self.start_ts is None:
                     self.start_ts = ts - ts % self.resolution
-                    self.start_offset = 0
-                    offset = 0
+                    idx = base_idx
                 else:
                     offset = (ts - self.start_ts) / self.resolution
-                idx = base_idx + (self.start_offset + offset) % self.cache_size
+                    idx = base_idx + (self.start_offset + offset) % self.cache_size
 
                 log.debug("put idx: %s, ts: %s, start_ts: %s, start_offset: %s, retention: %s" %
                           (idx, ts, self.start_ts, self.start_offset, self.retention))
-                self.setWrite(ts)
                 self.points[idx] = val
             except Exception as e:
                 log.err('put error in FileCache: %s' % e)
@@ -263,9 +254,13 @@ class FileCache(object):
                           for i in range(length)]
 
             if clear:
-                self.start_offset = end_offset
-                self.start_ts = timestamps[-1] + self.resolution
-                self.can_write = False
+                next_ts = timestamps[-1] + self.resolution
+                if self.max_ts < next_ts:
+                    self.start_ts = None
+                    self.start_offset = 0
+                else:
+                    self.start_ts = next_ts
+                    self.start_offset = end_offset
 
             return zip(timestamps, zip(*rs))
 
