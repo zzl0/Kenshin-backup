@@ -1,21 +1,35 @@
 # coding: utf-8
 
-import sys
+import argparse
 import struct
 import socket
 import cPickle as pickle
+import fnv1a
 
-RUROUNI_SERVER = '127.0.0.1'
-RUROUNI_QUERY_PORT = 7002
+RUROUNI_QUERY_PORTS = [7002, 7102, 7202]
+
 
 def main():
-    metric = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--server', default='127.0.0.1',
+                        help="server's host(or ip).")
+    parser.add_argument('--num', type=int, default=3,
+                        help='number of rurouni caches.')
+    parser.add_argument('metric', help="metric name.")
+    args = parser.parse_args()
+
+    server = args.server
+    metric = args.metric
+    num = args.num
+    port_idx = fnv1a.get_hash_bugfree(metric) % num
+    port = RUROUNI_QUERY_PORTS[port_idx]
+
     conn = socket.socket()
     try:
-        conn.connect((RUROUNI_SERVER, RUROUNI_QUERY_PORT))
+        conn.connect((server, port))
     except socket.error:
         raise SystemError("Couldn't connect to %s on port %s" %
-                          (RUROUNI_SERVER, RUROUNI_QUERY_PORT))
+                          (server, port))
 
     request = {
         'type': 'cache-query',
