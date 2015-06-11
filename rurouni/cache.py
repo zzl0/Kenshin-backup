@@ -35,7 +35,11 @@ class MetricCache(object):
                 with open(metrics_file) as f:
                     for line in f:
                         line = line.strip('\n')
-                        metric, file_idx, file_pos = line.rsplit(" ", 2)
+                        try:
+                            metric, file_idx, file_pos = line.rsplit(" ", 2)
+                        except:
+                            # ignore error format
+                            continue
                         schema = getSchema(metric)
                         schema_cache = self.getSchemaCache(schema)
                         schema_cache.add(schema, int(file_idx), int(file_pos))
@@ -59,11 +63,19 @@ class MetricCache(object):
                 file_idx = schema_cache.getFileCacheIdx(schema)
                 pos_idx = schema_cache[file_idx].getPosIdx()
 
-                # create link
+                # create file
                 file_path = getFilePath(schema.name, file_idx)
-                self.metrics_fh.write("%s %s %s" % (metric, file_idx, pos_idx) + '\n')
+                if not os.path.exists(file_path):
+                    tags = [''] * schema.metrics_max_num
+                    kenshin.create(file_path, tags, schema.archives, schema.xFilesFactor,
+                                   schema.aggregationMethod)
+                # update file metadata
                 kenshin.add_tag(metric, file_path, pos_idx)
+                # create link
                 createLink(metric, file_path)
+                # create index
+                self.metrics_fh.write("%s %s %s" % (metric, file_idx, pos_idx) + '\n')
+
                 self.metric_idxs[metric] = (schema.name, file_idx, pos_idx)
                 return self.metric_idxs[metric]
 
@@ -124,12 +136,6 @@ class SchemaCache(object):
         # there is no file cache avaiable, we create a new one
         cache = FileCache(schema)
         self.file_caches.append(cache)
-
-        # create file
-        file_path = getFilePath(schema.name, self.curr_idx)
-        tags = [''] * schema.metrics_max_num
-        kenshin.create(file_path, tags, schema.archives, schema.xFilesFactor,
-                       schema.aggregationMethod)
         return self.curr_idx
 
     def add(self, schema, file_idx, file_pos):
