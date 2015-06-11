@@ -76,9 +76,9 @@ def writeCachedDataPointsWhenStop(file_cache_idxs):
     pop_func = MetricCache.pop
     for schema_name, file_idx in file_cache_idxs:
         datapoints = pop_func(schema_name, file_idx, int(time.time()), False)
-        file_path = getFilePath(schema_name, file_idx)
-
-        try:
-            kenshin.update(file_path, datapoints)
-        except Exception as e:
-            log.err('Error writing to %s: %s' % (file_path, e))
+        if datapoints:
+            file_path = getFilePath(schema_name, file_idx)
+            try:
+                kenshin.update(file_path, datapoints)
+            except Exception as e:
+                log.err('Error writing to %s: %s' % (file_path, e))

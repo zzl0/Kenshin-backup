@@ -5,10 +5,10 @@ from storage import (
     RetentionParser)
 
 __version__ = "0.1.5"
-__commit__ = "63ad1d1"
+__commit__ = "03fe8e3"
 __author__ = "zhuzhaolong"
-__email__ = "zhuzhaolong@douban.com"
-__date__ = "Sun May 24 13:32:23 2015 +0800"
+__email__ = "zhuzhaolong0@gmail.com"
+__date__ = "Mon Jun 1 11:20:53 2015 +0800"
 
 
 _storage = Storage()
