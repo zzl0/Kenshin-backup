@@ -125,16 +125,22 @@ defaultSchema = DefaultSchema(
     1.2
 )
 
-_schemas = None
-def getSchema(metric):
-    global _schemas
-    if _schemas is None:
-        conf_file = join(settings.CONF_DIR, 'storage-schemas.conf')
-        _schemas = loadStorageSchemas(conf_file)
-    for schema in _schemas:
-        if schema.match(metric):
-            return schema
-    return defaultSchema
+
+class StorageSchemas(object):
+    def __init__(self, conf_file):
+        self.schemas = loadStorageSchemas(conf_file)
+
+    def getSchemaByMetric(self, metric):
+        for schema in self.schemas:
+            if schema.match(metric):
+                return schema
+        return defaultSchema
+
+    def getSchemaByName(self, schema_name):
+        for schema in self.schemas:
+            if schema.name == schema_name:
+                return schema
+        return None
 
 
 if __name__ == '__main__':
