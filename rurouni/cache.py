@@ -7,7 +7,7 @@ import kenshin
 from kenshin.consts import NULL_VALUE
 from rurouni import log
 from rurouni.conf import settings
-from rurouni.storage import getFilePath, getSchema, createLink
+from rurouni.storage import getFilePath, createLink, StorageSchemas
 
 
 class MetricCache(object):
@@ -19,10 +19,16 @@ class MetricCache(object):
         self.metric_idxs = {}
         self.schema_caches = {}
         self.metrics_fh = None
+        self.storage_schemas = None
 
     def __del__(self):
         if self.metrics_fh is not None:
             self.metrics_fh.close()
+
+    def initStorageSchemas(self):
+        if self.storage_schemas is None:
+            conf_file = os.path.join(settings.CONF_DIR, 'storage-schemas.conf')
+            self.storage_schemas = StorageSchemas(conf_file)
 
     def initCache(self):
         with self.lock:
@@ -30,20 +36,29 @@ class MetricCache(object):
             if self.metrics_fh is not None:
                 return
 
+            self.initStorageSchemas()
             metrics_file = settings.METRICS_FILE
             if os.path.exists(metrics_file):
+                MAX_ALLOW_ERR_LINE = 1
+                err_line_cnt = 0
                 with open(metrics_file) as f:
                     for line in f:
                         line = line.strip('\n')
                         try:
-                            metric, file_idx, file_pos = line.rsplit(" ", 2)
-                        except:
-                            # ignore error format
-                            continue
-                        schema = getSchema(metric)
+                            metric, schema_name, file_idx, file_pos = line.split(" ")
+                            file_idx = int(file_idx)
+                            file_pos = int(file_pos)
+                        except Exception as e:
+                            if err_line_cnt < MAX_ALLOW_ERR_LINE:
+                                err_line_cnt += 1
+                                continue
+                            else:
+                                raise Exception('Index file has many error: %s' % e)
+
+                        schema = self.storage_schemas.getSchemaByName(schema_name)
                         schema_cache = self.getSchemaCache(schema)
-                        schema_cache.add(schema, int(file_idx), int(file_pos))
-                        self.metric_idxs[metric] = (schema.name, int(file_idx), int(file_pos))
+                        schema_cache.add(schema, file_idx, file_pos)
+                        self.metric_idxs[metric] = (schema.name, file_idx, file_pos)
 
             self.metrics_fh = open(metrics_file, 'a')
 
@@ -58,7 +73,7 @@ class MetricCache(object):
             if metric in self.metric_idxs:
                 return self.metric_idxs[metric]
             else:
-                schema = getSchema(metric)
+                schema = self.storage_schemas.getSchemaByMetric(metric)
                 schema_cache = self.getSchemaCache(schema)
                 file_idx = schema_cache.getFileCacheIdx(schema)
                 pos_idx = schema_cache[file_idx].getPosIdx()
@@ -74,7 +89,7 @@ class MetricCache(object):
                 # create link
                 createLink(metric, file_path)
                 # create index
-                self.metrics_fh.write("%s %s %s" % (metric, file_idx, pos_idx) + '\n')
+                self.metrics_fh.write("%s %s %s %s\n" % (metric, schema.name, file_idx, pos_idx))
 
                 self.metric_idxs[metric] = (schema.name, file_idx, pos_idx)
                 return self.metric_idxs[metric]
@@ -140,7 +155,7 @@ class SchemaCache(object):
 
     def add(self, schema, file_idx, file_pos):
         if len(self.file_caches) <= file_idx:
-            for i in range(len(self.file_caches), file_idx + 1):
+            for _ in range(len(self.file_caches), file_idx + 1):
                 self.file_caches.append(FileCache(schema))
         self.file_caches[file_idx].add(file_pos)
 
