@@ -117,7 +117,7 @@ class RurouniOptions(usage.Options):
 
         # normalize and expand path
         variables = ['STORAGE_DIR', 'LOCAL_DATA_DIR', 'LOCAL_LINK_DIR',
-                     'PID_DIR', 'LOG_DIR', 'pidfile', 'METRICS_FILE']
+                     'PID_DIR', 'LOG_DIR', 'pidfile', 'INDEX_FILE']
         for var in variables:
             settings[var] = normpath(expanduser(settings[var]))
 
@@ -283,7 +283,7 @@ def read_config(program, options):
         join(settings['LOG_DIR'], '%s-%s' % (program, instance))
     )
 
-    settings['METRICS_FILE'] = join(settings['LOCAL_DATA_DIR'],
+    settings['INDEX_FILE'] = join(settings['LOCAL_DATA_DIR'],
                                     '%s.idx' % instance)
     return settings
 
