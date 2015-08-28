@@ -2,6 +2,8 @@
 # coding: utf-8
 import os
 import sys
+import glob
+import shutil
 from subprocess import check_output
 
 from kenshin import header, pack_header
@@ -85,6 +87,11 @@ def delete(storage_dir, metric_file):
                 last_index = index
         if last_index is not None:
             delete_file(storage_dir, last_index, group)
+
+    # delete metric-test directory
+    metric_test_dirs = glob.glob(os.path.join(storage_dir, '*', 'metric-test'))
+    for d in metric_test_dirs:
+        shutil.rmtree(d)
 
 
 def sort_metric_file(metric_file):
