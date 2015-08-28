@@ -56,7 +56,7 @@ def createCacheService(options):
     from rurouni.cache import MetricCache
     from rurouni.protocols import CacheManagementHandler
 
-    MetricCache.initCache()
+    MetricCache.init()
     state.events.metricReceived.addHandler(MetricCache.put)
     root_service = createBaseService(options)
 

@@ -2,7 +2,8 @@
 
 import os
 import re
-from os.path import join, sep
+import glob
+from os.path import join, sep, splitext, basename, dirname
 
 import kenshin
 from kenshin.utils import mkdir_p
@@ -22,11 +23,64 @@ def getMetricPath(metric):
 
 def createLink(metric, file_path):
     metric_path = getMetricPath(metric)
-    dir_name = os.path.dirname(metric_path)
-    mkdir_p(dir_name)
-    if os.path.lexists(metric_path):
-        os.rename(metric_path, metric_path+'.bak')
-    os.symlink(file_path, metric_path)
+    _createLinkHelper(metric_path, file_path)
+
+
+def _createLinkHelper(link_path, file_path):
+    """
+    Create symlink link_path -> file_path.
+    """
+    dir_ = dirname(link_path)
+    mkdir_p(dir_)
+    if os.path.lexists(link_path):
+        os.rename(link_path, link_path +'.bak')
+    os.symlink(file_path, link_path)
+
+
+def getFilePathByInstanceDir(instance_data_dir, schema_name, file_idx):
+    return join(instance_data_dir, schema_name, "%d.hs" % file_idx)
+
+
+def getMetricPathByInstanceDir(instance_link_dir, metric):
+    path = metric.replace(".", sep)
+    return join(instance_link_dir, path + ".hs")
+
+
+def rebuildIndex(instance_data_dir, instance_index_file):
+    """
+    Rebuild index file from data file, if a data file has no valid metric,
+    we will remove it.
+    """
+    out = open(instance_index_file, 'w')
+    for schema_name in os.listdir(instance_data_dir):
+        hs_file_pat = os.path.join(instance_data_dir, schema_name, '*.hs')
+        for fp in glob.glob(hs_file_pat):
+            with open(fp) as f:
+                empty_flag = True
+                header = kenshin.header(f)
+                metric_list = header['tag_list']
+                file_id = splitext(basename(fp))[0]
+                for i, metric in enumerate(metric_list):
+                    empty_flag = False
+                    if metric != '':
+                        out.write('%s %s %s %s\n' %
+                                  (metric, schema_name, file_id, i))
+            if empty_flag:
+                os.remove(fp)
+    out.close()
+
+
+def rebuildLink(instance_data_dir, instance_link_dir):
+    for schema_name in os.listdir(instance_data_dir):
+        hs_file_pat = os.path.join(instance_data_dir, schema_name, '*.hs')
+        for fp in glob.glob(hs_file_pat):
+            with open(fp) as f:
+                header = kenshin.header(f)
+                metric_list = header['tag_list']
+                for metric in metric_list:
+                    if metric != '':
+                        link_path = getMetricPathByInstanceDir(instance_link_dir, metric)
+                        _createLinkHelper(link_path, fp)
 
 
 class Archive:
@@ -102,7 +156,7 @@ def loadStorageSchemas(conf_file):
 
         try:
             kenshin.validate_archive_list(archives, xff)
-        except kenshin.InvalidConfig as e:
+        except kenshin.InvalidConfig:
             log.err("Invalid schema found in %s." % section)
 
         schema = PatternSchema(section, pattern, float(xff), agg, archives,
@@ -144,4 +198,5 @@ class StorageSchemas(object):
 
 
 if __name__ == '__main__':
-    loadStorageSchemas()
+    import sys
+    loadStorageSchemas(sys.argv[1])

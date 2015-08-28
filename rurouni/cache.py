@@ -7,7 +7,9 @@ import kenshin
 from kenshin.consts import NULL_VALUE
 from rurouni import log
 from rurouni.conf import settings
-from rurouni.storage import getFilePath, createLink, StorageSchemas
+from rurouni.storage import (
+    getFilePath, createLink, StorageSchemas, rebuildIndex, rebuildLink
+)
 
 
 class MetricCache(object):
@@ -25,42 +27,56 @@ class MetricCache(object):
         if self.metrics_fh is not None:
             self.metrics_fh.close()
 
-    def initStorageSchemas(self):
+    def init(self):
+        with self.lock:
+            index_file = settings.INDEX_FILE
+            instance_data_dir = os.path.join(
+                settings.LOCAL_DATA_DIR, settings.instance)
+            instance_link_dir = os.path.join(
+                settings.LOCAL_LINK_DIR, settings.instance)
+
+            if not os.path.exists(index_file):
+                rebuildIndex(instance_data_dir, index_file)
+
+            if not os.path.exists(instance_link_dir):
+                rebuildLink(instance_data_dir, instance_link_dir)
+
+            self._initCache(index_file)
+
+    def _initCache(self, index_file):
+        # avoid repeated call
+        if self.metrics_fh is not None:
+            return
+
+        self._initStorageSchemas()
+        if os.path.exists(index_file):
+            MAX_ALLOW_ERR_LINE = 1
+            err_line_cnt = 0
+            with open(index_file) as f:
+                for line in f:
+                    line = line.strip('\n')
+                    try:
+                        metric, schema_name, file_idx, file_pos = line.split(" ")
+                        file_idx = int(file_idx)
+                        file_pos = int(file_pos)
+                    except Exception as e:
+                        if err_line_cnt < MAX_ALLOW_ERR_LINE:
+                            err_line_cnt += 1
+                            continue
+                        else:
+                            raise Exception('Index file has many error: %s' % e)
+
+                    schema = self.storage_schemas.getSchemaByName(schema_name)
+                    schema_cache = self.getSchemaCache(schema)
+                    schema_cache.add(schema, file_idx, file_pos)
+                    self.metric_idxs[metric] = (schema.name, file_idx, file_pos)
+
+        self.metrics_fh = open(index_file, 'a')
+
+    def _initStorageSchemas(self):
         if self.storage_schemas is None:
             conf_file = os.path.join(settings.CONF_DIR, 'storage-schemas.conf')
             self.storage_schemas = StorageSchemas(conf_file)
-
-    def initCache(self):
-        with self.lock:
-            # avoid repeated call
-            if self.metrics_fh is not None:
-                return
-
-            self.initStorageSchemas()
-            metrics_file = settings.METRICS_FILE
-            if os.path.exists(metrics_file):
-                MAX_ALLOW_ERR_LINE = 1
-                err_line_cnt = 0
-                with open(metrics_file) as f:
-                    for line in f:
-                        line = line.strip('\n')
-                        try:
-                            metric, schema_name, file_idx, file_pos = line.split(" ")
-                            file_idx = int(file_idx)
-                            file_pos = int(file_pos)
-                        except Exception as e:
-                            if err_line_cnt < MAX_ALLOW_ERR_LINE:
-                                err_line_cnt += 1
-                                continue
-                            else:
-                                raise Exception('Index file has many error: %s' % e)
-
-                        schema = self.storage_schemas.getSchemaByName(schema_name)
-                        schema_cache = self.getSchemaCache(schema)
-                        schema_cache.add(schema, file_idx, file_pos)
-                        self.metric_idxs[metric] = (schema.name, file_idx, file_pos)
-
-            self.metrics_fh = open(metrics_file, 'a')
 
     def put(self, metric, datapoint):
         log.debug("MetricCache received (%s, %s)" % (metric, datapoint))
