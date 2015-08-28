@@ -32,4 +32,6 @@ TODO
 - [x] web interface
 - [x] interface redesign
 - [x] name collision
-- migration tool
+- [x] migration tool (whisper -> kenshin)
+- [ ] rehash tool
+- [ ] puppet tool
