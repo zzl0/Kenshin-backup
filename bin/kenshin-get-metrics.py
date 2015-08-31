@@ -5,8 +5,7 @@ import os
 import glob
 
 
-def match_metrics(index_dir, reg_exp):
-    reg_exp = re.compile(reg_exp)
+def match_metrics(index_dir, regexps):
     index_files = glob.glob(os.path.join(index_dir, '*.idx'))
     for index in index_files:
         bucket = os.path.splitext(os.path.basename(index))[0]
@@ -14,18 +13,31 @@ def match_metrics(index_dir, reg_exp):
             for line in f:
                 line = line.strip()
                 metric, schema_name, fid, pos = line.split(' ')
-                if reg_exp.match(metric):
-                    yield ' '.join([bucket, schema_name, fid, pos, metric])
+                for p in regexps:
+                    if p.match(metric):
+                        yield ' '.join([bucket, schema_name, fid, pos, metric])
+                        break
+
+
+def compile_regexp(regexp_file):
+    with open(regexp_file) as f:
+        for line in f:
+            line = line.strip()
+            yield re.compile(line)
 
 
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--dir', required=True, help='directory that contains kenshin index files.')
-    parser.add_argument('-r', '--reg-exp', required=True, help='regular expression that matches metrics.')
+    parser.add_argument('-d', '--dirs', required=True, help='directories that contain kenshin index files, seperated by comma.')
+    parser.add_argument('-f', '--regexp-file', required=True, help='file that contain regular expressions.')
     args = parser.parse_args()
-    for m in match_metrics(args.dir, args.reg_exp):
-        print m
+
+    regexps = list(compile_regexp(args.regexp_file))
+
+    for dir_ in args.dirs.split(","):
+        for m in match_metrics(dir_, regexps):
+            print m
 
 
 if __name__ == '__main__':
