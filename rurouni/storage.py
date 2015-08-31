@@ -61,8 +61,8 @@ def rebuildIndex(instance_data_dir, instance_index_file):
                 metric_list = header['tag_list']
                 file_id = splitext(basename(fp))[0]
                 for i, metric in enumerate(metric_list):
-                    empty_flag = False
                     if metric != '':
+                        empty_flag = False
                         out.write('%s %s %s %s\n' %
                                   (metric, schema_name, file_id, i))
             if empty_flag:
