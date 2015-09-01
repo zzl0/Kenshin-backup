@@ -60,12 +60,14 @@ def delete_file(storage_dir, index, pos_metrics):
                 released_size += len(tag)
             elif tag_list[pos_idx] != "":
                 print >>sys.stderr, "tag not match: (%s, %d)" % (tag, pos_idx)
-        inter_tag_list = tag_list + ["N" * (reserved_size + released_size)]
-        packed_header, _ = pack_header(inter_tag_list,
-                                                 archive_list,
-                                                 header_info["x_files_factor"],
-                                                 agg_name)
-        fh.write(packed_header)
+
+        if released_size != 0:
+            inter_tag_list = tag_list + ["N" * (reserved_size + released_size)]
+            packed_header, _ = pack_header(inter_tag_list,
+                                           archive_list,
+                                           header_info["x_files_factor"],
+                                           agg_name)
+            fh.write(packed_header)
 
 
 def delete(storage_dir, metric_file):
