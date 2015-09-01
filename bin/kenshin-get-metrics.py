@@ -12,7 +12,10 @@ def match_metrics(index_dir, regexps):
         with open(index) as f:
             for line in f:
                 line = line.strip()
-                metric, schema_name, fid, pos = line.split(' ')
+                try:
+                    metric, schema_name, fid, pos = line.split(' ')
+                except ValueError:
+                    pass
                 for p in regexps:
                     if p.match(metric):
                         yield ' '.join([bucket, schema_name, fid, pos, metric])
@@ -23,7 +26,8 @@ def compile_regexp(regexp_file):
     with open(regexp_file) as f:
         for line in f:
             line = line.strip()
-            yield re.compile(line)
+            if line and not line.startswith("#"):
+                yield re.compile(line)
 
 
 def main():

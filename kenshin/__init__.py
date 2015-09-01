@@ -5,10 +5,10 @@ from kenshin.storage import (
     RetentionParser)
 
 __version__ = "0.1.5"
-__commit__ = "2e37e78"
+__commit__ = "22a334c"
 __author__ = "zhuzhaolong"
 __email__ = "zhuzhaolong0@gmail.com"
-__date__ = "Thu Aug 27 11:14:49 2015 +0800"
+__date__ = "Tue Sep 1 15:18:55 2015 +0800"
 
 
 _storage = Storage()

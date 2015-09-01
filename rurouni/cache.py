@@ -35,11 +35,11 @@ class MetricCache(object):
             instance_link_dir = os.path.join(
                 settings.LOCAL_LINK_DIR, settings.instance)
 
-            if not os.path.exists(index_file):
-                rebuildIndex(instance_data_dir, index_file)
-
-            if not os.path.exists(instance_link_dir):
-                rebuildLink(instance_data_dir, instance_link_dir)
+            if os.path.exists(instance_data_dir):
+                if not os.path.exists(index_file):
+                    rebuildIndex(instance_data_dir, index_file)
+                if not os.path.exists(instance_link_dir):
+                    rebuildLink(instance_data_dir, instance_link_dir)
 
             self._initCache(index_file)
 
