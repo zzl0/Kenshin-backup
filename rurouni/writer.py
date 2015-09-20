@@ -39,7 +39,6 @@ def writeForever():
                 write = writeCachedDataPoints(file_cache_idxs)
         except Exception as e:
             log.err('write error: %s' % e)
-            raise e
         # The writer thread only sleeps when there is no write
         # or an error occurs
         if not write:
