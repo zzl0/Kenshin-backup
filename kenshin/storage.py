@@ -381,7 +381,10 @@ class Storage(object):
                 while age > curr_archive['retention']:
                     # we can't fit any more points in archive i
                     if curr_points:
-                        self._update_archive(f, header, curr_archive, curr_points, i)
+                        timestamp_range = (min(mtime, curr_points[-1][0]),
+                                           curr_points[0][0])
+                        self._update_archive(f, header, curr_archive,
+                                             curr_points, i, timestamp_range)
                         curr_points = []
                     try:
                         curr_archive = archive_list[i+1]
@@ -397,9 +400,12 @@ class Storage(object):
                 curr_points.append(point)
 
             if curr_archive and curr_points:
-                self._update_archive(f, header, curr_archive, curr_points, i, mtime)
+                timestamp_range = (min(mtime, curr_points[-1][0]),
+                                   curr_points[0][0])
+                self._update_archive(f, header, curr_archive, curr_points, i,
+                                     timestamp_range)
 
-    def _update_archive(self, fh, header, archive, points, archive_idx, mtime=None):
+    def _update_archive(self, fh, header, archive, points, archive_idx, timestamp_range):
         step = archive['sec_per_point']
         aligned_points = sorted((p[0] - (p[0] % step), p[1])
                                 for p in points if p)
@@ -458,12 +464,10 @@ class Storage(object):
         archive_list = header['archive_list']
         next_archive_idx = archive_idx + 1
         if next_archive_idx < len(archive_list):
-            time_end = aligned_points[-1][0]
-            if mtime:
-                time_start = max(min(mtime, aligned_points[0][0]),
-                                 time_end - archive['retention'])
-            else:
-                time_start = aligned_points[0][0]
+            # update timestamp_range
+            time_start, time_end = timestamp_range
+            time_end = max(time_end, aligned_points[-1][0])
+            time_start = min(time_start, aligned_points[0][0])
             timestamp_range = (time_start, time_end)
             self._propagate(fh, header, archive, archive_list[next_archive_idx],
                             timestamp_range, next_archive_idx)
@@ -541,18 +545,10 @@ class Storage(object):
         series_format = byte_order + (point_type * point_num)
         unpacked_series = struct.unpack(series_format, series_str)
 
-        ts = unpacked_series[0]
-        idx = 0
-        step = len(header['tag_list']) + 1
-        for i in xrange(0, len(unpacked_series), step):
-            if ts > unpacked_series[i]:
-                idx = i
-                break
-        unpacked_series = unpacked_series[idx:]
-
         # and finally we construct a list of values
         point_cnt = (lower_interval_end - lower_interval_start) / lower['sec_per_point']
         tag_cnt = len(header['tag_list'])
+        step = tag_cnt + 1
         agg_cnt = lower['sec_per_point'] / higher['sec_per_point']
         step = (tag_cnt + 1) * agg_cnt
         lower_points = [None] * point_cnt
@@ -567,7 +563,9 @@ class Storage(object):
             lower_points[i/step] = (ts, agg_value)
 
         lower_points = [x for x in lower_points if x and x[0]]  # filter zero item
-        self._update_archive(fh, header, lower, lower_points, lower_idx)
+        timestamp_range = (lower_interval_start, max(lower_interval_end, until_time))
+        self._update_archive(fh, header, lower, lower_points, lower_idx,
+                             timestamp_range)
 
     def _get_agg_value(self, higher_points, tag_cnt, agg_id, ts_start, ts_end):
         higher_points = higher_points[::-1]
@@ -593,7 +591,7 @@ class Storage(object):
 
     @staticmethod
     def filter_points_by_time(points, ts_start, ts_end):
-        return [p for p in points if ts_start <= p[0] <= ts_end]
+        return [p for p in points if ts_start <= p[0] < ts_end]
 
     @staticmethod
     def filter_values(points):

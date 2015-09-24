@@ -214,8 +214,7 @@ class FileCache(object):
             return self.bitmap + 1 == (1 << self.metrics_max_num)
 
     def metricEmpty(self):
-        with self.lock:
-            return not self.start_ts
+        return not self.start_ts
 
     def canWrite(self, now):
         with self.lock:
@@ -251,9 +250,9 @@ class FileCache(object):
         return (self.start_offset + interval) % self.cache_size
 
     def get(self, end_ts=None, clear=False):
-        if self.metricEmpty():
-            return []
         with self.lock:
+            if self.metricEmpty():
+                return []
             begin_offset = self.start_offset
             if end_ts:
                 end_offset = self.get_offset(end_ts)
