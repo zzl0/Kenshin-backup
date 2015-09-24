@@ -31,9 +31,8 @@ class TestStorageBase(unittest.TestCase):
         shutil.rmtree(self.data_dir)
 
     @staticmethod
-    def _gen_val(i):
-        return (i, 10+i)
-
+    def _gen_val(i, num=2):
+        return [10 * j + i for j in range(num)]
 
 class TestStorage(TestStorageBase):
 
@@ -216,4 +215,43 @@ class TestLostPoint(TestStorageBase):
         time_info = (from_ts, now_ts, 1)
         vals = [(5.0, 15.0), (4.0, 14.0), self.null_point, (2.0, 12.0), (1.0, 11.0)]
         expected = time_info, vals
+        self.assertEqual(series[1:], expected)
+
+
+class TestMultiArchive(TestStorageBase):
+
+    def _basic_setup(self):
+        metric_name = 'sys.cpu.user'
+
+        tag_list = [
+            'host=webserver01,cpu=0',
+            'host=webserver01,cpu=1',
+            'host=webserver01,cpu=2',
+        ]
+        archive_list = [
+            (1, 60),
+            (3, 60),
+            (6, 60),
+        ]
+        x_files_factor = 5
+        agg_name = 'min'
+        return [metric_name, tag_list, archive_list, x_files_factor, agg_name]
+
+    def test_time_range(self):
+        now_ts = 1411628779
+        #  downsample time of chive2: 1411628760 (floor(1411628779. / (6*5)))
+        point_seeds_list = [range(19, 30), range(5, 2)]
+        mtime = None
+        for i, point_seeds in enumerate(point_seeds_list):
+            if i != 0:
+                mtime = now_ts - max(point_seeds_list[i - 1])
+            points = [(now_ts - i, self._gen_val(i, num=3)) for i in point_seeds]
+            self.storage.update(self.path, points, now_ts, mtime)
+        from_ts = 1411628760 - 2 * 6
+        until_ts = 1411628760
+        series = self.storage.fetch(self.path, from_ts, until_ts,
+                                    now=from_ts + 180 + 1)
+        time_info = (from_ts, roundup(until_ts, 6), 6)
+        values = [(26.0, 36.0, 46.0), (20.0, 30.0, 40.0)]
+        expected = (time_info, values)
         self.assertEqual(series[1:], expected)
