@@ -541,18 +541,10 @@ class Storage(object):
         series_format = byte_order + (point_type * point_num)
         unpacked_series = struct.unpack(series_format, series_str)
 
-        ts = unpacked_series[0]
-        idx = 0
-        step = len(header['tag_list']) + 1
-        for i in xrange(0, len(unpacked_series), step):
-            if ts > unpacked_series[i]:
-                idx = i
-                break
-        unpacked_series = unpacked_series[idx:]
-
         # and finally we construct a list of values
         point_cnt = (lower_interval_end - lower_interval_start) / lower['sec_per_point']
         tag_cnt = len(header['tag_list'])
+        step = tag_cnt + 1
         agg_cnt = lower['sec_per_point'] / higher['sec_per_point']
         step = (tag_cnt + 1) * agg_cnt
         lower_points = [None] * point_cnt
@@ -593,7 +585,7 @@ class Storage(object):
 
     @staticmethod
     def filter_points_by_time(points, ts_start, ts_end):
-        return [p for p in points if ts_start <= p[0] <= ts_end]
+        return [p for p in points if ts_start <= p[0] < ts_end]
 
     @staticmethod
     def filter_values(points):

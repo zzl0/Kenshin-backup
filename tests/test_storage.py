@@ -168,7 +168,6 @@ class TestLostPoint(TestStorageBase):
     def test_update_propagate(self):
         now_ts = 1411628779
         point_seeds_list = [range(30, 45), range(15)]
-        # point_seeds_list = [range(60)]
         mtime = None
         for i, point_seeds in enumerate(point_seeds_list):
             if i != 0:
@@ -185,6 +184,25 @@ class TestLostPoint(TestStorageBase):
                   null, null, null, null, (14.0, 24.0), (11.0, 21.0), (8.0, 18.0),
                   (5.0, 15.0), null, null]
         expected = time_info, values
+        self.assertEqual(series[1:], expected)
+
+    def test_update_propagate_with_special_start_time(self):
+        now_ts = 1411628779
+        # start time is 1411628760
+        point_seeds_list = [range(10, 20), range(1, 7)]
+        mtime = None
+        for i, point_seeds in enumerate(point_seeds_list):
+            if i != 0:
+                mtime = now_ts - max(point_seeds_list[i - 1])
+            points = [(now_ts - i, self._gen_val(i)) for i in point_seeds]
+            self.storage.update(self.path, points, now_ts, mtime)
+        from_ts = 1411628760
+        until_ts = from_ts + 15
+        series = self.storage.fetch(self.path, from_ts, until_ts,
+                                    now=from_ts + 60 + 1)
+        time_info = (from_ts, roundup(until_ts, 3), 3)
+        values = [(17.0, 27.0), (14.0, 24.0), (11.0, 21.0), (10.0, 20.0), (5.0, 15.0)]
+        expected = (time_info, values)
         self.assertEqual(series[1:], expected)
 
     def test_basic_update(self):
